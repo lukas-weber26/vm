@@ -5,10 +5,8 @@
 
 typedef enum {MOV} instruction_type;
 typedef enum {RM_RM, I_RM, I_R, M_A, A_M, RM_S, SR_RM} instruction_subtype;
-//how to read these: R-register, m-memory, i-imediate, a-accumilator, s-segment
-//left is source, right is dest, multiple letters mean muliple options
+typedef enum {REG, MEM, IM, SR, ACC} target;
 
-//damn, this instruction set is wild
 typedef struct instruction {
 	instruction_type type;
 	instruction_subtype subtype;
@@ -20,7 +18,9 @@ typedef struct instruction {
 	int displacement;
 	int imediate_value;
 	int SR;
-	char * text_form;
+	//the following are derrived items
+	target source;
+	target destination;
 } instruction;
 
 void decode(FILE * assembly_file, FILE * output_file);
@@ -41,16 +41,8 @@ void print_segment_register(instruction * current_instruction, FILE * output_fil
 void print_memory(instruction * current_instruction, FILE * output_file);
 void print_mov_instruction(instruction * current_instruction, FILE * output_file);
 void print_instruction(instruction * current_instruction, FILE * output_file);
-
-
-void print_mov_instruction(instruction * current_instruction, FILE * output_file) {
-	fprintf(output_file, "mov ");
-	//figure out dest.
-	fprintf(output_file, ", ");
-	//figure out source.
-	fprintf(output_file, "\n");
-}
-//this thing is a total pain. probably need a pretty intense function that can actually tell what is happening. potentially a really big switch statement 
+void print_accumilator(instruction * current_instruction, FILE * output_file);
+void print_from_target(target target_type, instruction * current_instruction, FILE * output_file);
 
 void print_instruction(instruction * current_instruction, FILE * output_file) {
 	switch (current_instruction->type) {
@@ -158,7 +150,16 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
-			
+
+		//this branch statement is unique to this subtype
+		if (new_instruction->direction == 0) {
+			//reg is source s
+			new_instruction->source = REG;
+			new_instruction->destination = new_instruction->mod == 3 ? REG : MEM;
+		} else {
+			new_instruction->source = new_instruction->mod == 3 ? REG : MEM;
+			new_instruction->destination = REG;
+		}
 
 	} else if (match_instructions(first_byte, 7, 0b01100011)) {
 		new_instruction->type = MOV;
@@ -175,6 +176,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		//this case can actually have another couple of direct data bytes. Crazy ass instruction to be honest
 		int first_data_byte = get_next_byte(assembly_file); 
 		new_instruction->imediate_value = read_data_byte(first_data_byte, new_instruction->word, assembly_file);
+			
+		new_instruction->source = IM;
+		new_instruction->destination = new_instruction->mod == 3 ? REG : MEM;
 
 	} else if (match_instructions(first_byte, 4, 0b00001011)) {
 		new_instruction->type = MOV;
@@ -186,6 +190,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		int second_byte = get_next_byte(assembly_file); 
 		new_instruction->imediate_value = read_data_byte(second_byte, new_instruction->word, assembly_file);
 
+		new_instruction->source = IM;
+		new_instruction->destination = REG;
+
 	} else if (match_instructions(first_byte, 7, 0b01010000)) {
 		new_instruction->type = MOV;
 		new_instruction->subtype = M_A;
@@ -195,6 +202,8 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		int second_byte = get_next_byte(assembly_file); 
 		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
 
+		new_instruction->source = MEM;
+		new_instruction->destination = ACC;
 
 	} else if (match_instructions(first_byte, 7, 0b01010001)) {
 		new_instruction->type = MOV;
@@ -204,6 +213,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		//read address
 		int second_byte = get_next_byte(assembly_file); 
 		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
+		
+		new_instruction->source = ACC;
+		new_instruction->destination = MEM;
 
 	} else if (match_instructions(first_byte, 8, 0b10001110)) {
 		new_instruction->type = MOV;
@@ -217,6 +229,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
 		
+		new_instruction->source = new_instruction->mod == 3 ? REG : MEM;
+		new_instruction->destination = SR;
+		
 	} else if (match_instructions(first_byte, 8, 0b10001100)) {
 		new_instruction->type = MOV;
 		new_instruction->subtype = SR_RM;
@@ -228,6 +243,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
+		
+		new_instruction->destination= new_instruction->mod == 3 ? REG : MEM;
+		new_instruction->source = SR;
 		
 	} else {
 		printf("Encountered an unknown instruction code.\n");
@@ -248,41 +266,6 @@ void decode(FILE * assembly_file, FILE * output_file) {
 	//question. Can this thing now be turned into a string
 
 	free(new_instruction);
-
-}
-
-int main(int argc, char * argv []) {
-
-	if (argc != 2 && argc != 3) {
-		printf("Usage: disassembler <filename> <output - optional>\n");
-		exit(0);
-	}
-
-	FILE * assembly_file= fopen(argv[1], "r");
-
-	if (assembly_file == NULL) {
-		printf("Could not open file: %s.\n", argv[1]);
-		exit(0);
-	}
-
-	FILE * output_stream = stdout;
-
-	if (argc == 3) {
-		output_stream = fopen(argv[2], "w");
-	}
-
-	if (output_stream == NULL) {
-		printf("Could not open file: %s.\n", argv[2]);
-		exit(0);
-	}
-	
-	fprintf(output_stream,";NASM assembly file.\n");
-	fprintf(output_stream,"bits 16\n\n");
-
-	decode(assembly_file, output_stream);
-
-	fclose(assembly_file);
-	fclose(output_stream); //this may be sketchy but seems to work fine.
 
 }
 
@@ -368,4 +351,61 @@ void print_segment_register(instruction * current_instruction, FILE * output_fil
 	}
 }
 
+void print_accumilator(instruction * current_instruction, FILE * output_file) {
+	//simply do not know enought about this kind of assembly to know if AH and AL are accessible in this instruction.
+	fprintf(output_file,"AX");
+}
 
+void print_from_target(target target_type, instruction * current_instruction, FILE * output_file) {
+	switch (target_type) {
+		case REG: print_register(current_instruction, output_file); break;
+		case MEM: print_memory(current_instruction, output_file); break;
+		case IM: print_memory(current_instruction, output_file); break;
+		case SR: print_segment_register(current_instruction, output_file); break;
+		case ACC: print_accumilator(current_instruction, output_file); break;
+		default: printf("Invalid instruction target type. Exiting.\n"); exit(0);
+	}	
+}
+
+void print_mov_instruction(instruction * current_instruction, FILE * output_file) {
+	fprintf(output_file, "mov ");
+	print_from_target(current_instruction->destination, current_instruction, output_file);
+	fprintf(output_file, ", ");
+	print_from_target(current_instruction->source, current_instruction, output_file);
+	fprintf(output_file, "\n");
+}
+
+int main(int argc, char * argv []) {
+
+	if (argc != 2 && argc != 3) {
+		printf("Usage: disassembler <filename> <output - optional>\n");
+		exit(0);
+	}
+
+	FILE * assembly_file= fopen(argv[1], "r");
+
+	if (assembly_file == NULL) {
+		printf("Could not open file: %s.\n", argv[1]);
+		exit(0);
+	}
+
+	FILE * output_stream = stdout;
+
+	if (argc == 3) {
+		output_stream = fopen(argv[2], "w");
+	}
+
+	if (output_stream == NULL) {
+		printf("Could not open file: %s.\n", argv[2]);
+		exit(0);
+	}
+	
+	fprintf(output_stream,";NASM assembly file.\n");
+	fprintf(output_stream,"bits 16\n\n");
+
+	decode(assembly_file, output_stream);
+
+	fclose(assembly_file);
+	fclose(output_stream); //this may be sketchy but seems to work fine.
+
+}
