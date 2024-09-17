@@ -1,11 +1,12 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/types.h>
+#include <inttypes.h>
 
 typedef enum {MOV} instruction_type;
 typedef enum {RM_RM, I_RM, I_R, M_A, A_M, RM_S, SR_RM} instruction_subtype;
-typedef enum {REG, REG2, MEM, IM, SR, ACC} target;
+typedef enum {REG, REG2, MEM, IM, SR, ACC, DMEM} target;
 
 typedef struct instruction {
 	instruction_type type;
@@ -42,6 +43,7 @@ void print_memory(instruction * current_instruction, FILE * output_file);
 void print_mov_instruction(instruction * current_instruction, FILE * output_file);
 void print_instruction(instruction * current_instruction, FILE * output_file);
 void print_accumilator(instruction * current_instruction, FILE * output_file);
+void print_direct_mem(instruction * current_instruction, FILE * output_file);
 void print_from_target(target target_type, instruction * current_instruction, FILE * output_file);
 
 void print_instruction(instruction * current_instruction, FILE * output_file) {
@@ -122,8 +124,8 @@ void read_mem_displacement(instruction *current_instruction,FILE * assembly_file
 			}
 			break;  
 		case 1: 
-			//8 bit displacement follows
-			current_instruction ->displacement = get_next_byte(assembly_file);
+			//8 bit displacement follows -- I belive that 8 bit values need a bit of help to get signs right
+			current_instruction ->displacement = (int)(char)get_next_byte(assembly_file);
 			break;
 		case 2:
 			//16 bit displacement follows
@@ -204,7 +206,7 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		int second_byte = get_next_byte(assembly_file); 
 		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
 
-		new_instruction->source = MEM;
+		new_instruction->source = DMEM;
 		new_instruction->destination = ACC;
 
 	} else if (match_instructions(first_byte, 7, 0b01010001)) {
@@ -217,7 +219,7 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
 		
 		new_instruction->source = ACC;
-		new_instruction->destination = MEM;
+		new_instruction->destination = DMEM;
 
 	} else if (match_instructions(first_byte, 8, 0b10001110)) {
 		new_instruction->type = MOV;
@@ -319,10 +321,26 @@ void print_register(instruction * current_instruction, FILE * output_file, int r
 
 void print_value(instruction * current_instruction, FILE * output_file) {
 	//unsure if this thing should go in brackets or something
+	if (current_instruction->destination == MEM) {
+		//print word or byte	
+		if (current_instruction->word == 1) {
+			fprintf(output_file,"word "); 
+		} else {
+			fprintf(output_file,"byte "); 
+		}
+	} 
+
 	fprintf(output_file,"%d",current_instruction->imediate_value); 
 }
 
+void print_direct_mem(instruction * current_instruction, FILE * output_file) {
+	fprintf(output_file,"[%d]",current_instruction->imediate_value); 
+}
+
 void print_memory(instruction * current_instruction, FILE * output_file) {
+
+	char plus = '+';
+
 	switch (current_instruction->mod) {
 		case 0: 
 			switch (current_instruction->rm) {
@@ -338,16 +356,17 @@ void print_memory(instruction * current_instruction, FILE * output_file) {
 		break;
 		case 1:
 		case 2:
+			if ((int16_t)current_instruction->displacement < 0) {plus = ' ';}
 			//8 and 16 bit value variants are functionally identical
 			switch (current_instruction->rm) {
-				case 0: fprintf(output_file, "[BX + SI + %d]", current_instruction->displacement); break;
-				case 1: fprintf(output_file, "[BX + DI + %d]", current_instruction->displacement); break;
-				case 2: fprintf(output_file, "[BP + SI + %d]", current_instruction->displacement); break;
-				case 3: fprintf(output_file, "[BP + DI + %d]", current_instruction->displacement); break;
-				case 4: fprintf(output_file, "[SI + %d]", current_instruction->displacement); break;
-				case 5: fprintf(output_file, "[DI + %d]", current_instruction->displacement); break;
-				case 6: fprintf(output_file, "[BP + %d]", current_instruction->displacement); break;
-				case 7: fprintf(output_file, "[BX + %d]", current_instruction->displacement); break;
+				case 0: fprintf(output_file, "[BX + SI %c%hd]", plus, current_instruction->displacement); break;
+				case 1: fprintf(output_file, "[BX + DI %c%hd]",plus,  current_instruction->displacement); break;
+				case 2: fprintf(output_file, "[BP + SI %c%hd]",plus,  current_instruction->displacement); break;
+				case 3: fprintf(output_file, "[BP + DI %c%hd]",plus,  current_instruction->displacement); break;
+				case 4: fprintf(output_file, "[SI %c%hd]", plus, current_instruction->displacement); break;
+				case 5: fprintf(output_file, "[DI %c%hd]",plus,  current_instruction->displacement); break;
+				case 6: fprintf(output_file, "[BP %c%hd]",plus,  current_instruction->displacement); break;
+				case 7: fprintf(output_file, "[BX %c%hd]", plus, current_instruction->displacement); break;
 				default:printf("Invalid RM value. Exiting.\n"); exit(0);
 			}
 		break;
@@ -377,7 +396,8 @@ void print_from_target(target target_type, instruction * current_instruction, FI
 		case REG: print_register(current_instruction, output_file, 1); break;
 		case REG2: print_register(current_instruction, output_file, 2); break;
 		case MEM: print_memory(current_instruction, output_file); break;
-		case IM: print_memory(current_instruction, output_file); break;
+		case DMEM: print_direct_mem(current_instruction, output_file); break;
+		case IM: print_value(current_instruction, output_file); break;
 		case SR: print_segment_register(current_instruction, output_file); break;
 		case ACC: print_accumilator(current_instruction, output_file); break;
 		default: printf("Invalid instruction target type. Exiting.\n"); exit(0);
