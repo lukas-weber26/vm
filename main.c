@@ -5,7 +5,7 @@
 
 typedef enum {MOV} instruction_type;
 typedef enum {RM_RM, I_RM, I_R, M_A, A_M, RM_S, SR_RM} instruction_subtype;
-typedef enum {REG, MEM, IM, SR, ACC} target;
+typedef enum {REG, REG2, MEM, IM, SR, ACC} target;
 
 typedef struct instruction {
 	instruction_type type;
@@ -35,7 +35,7 @@ int get_middle_two_bits(int byte);
 int read_address_byte(int byte, FILE * assembly_file);
 int read_data_byte(int byte, int w, FILE * assembly_file);
 void read_mem_displacement(instruction *current_instruction,FILE * assembly_file);
-void print_register(instruction * current_instruction, FILE * output_file);
+void print_register(instruction * current_instruction, FILE * output_file, int reg_number);
 void print_value(instruction * current_instruction, FILE * output_file);
 void print_segment_register(instruction * current_instruction, FILE * output_file);
 void print_memory(instruction * current_instruction, FILE * output_file);
@@ -124,9 +124,11 @@ void read_mem_displacement(instruction *current_instruction,FILE * assembly_file
 		case 1: 
 			//8 bit displacement follows
 			current_instruction ->displacement = get_next_byte(assembly_file);
+			break;
 		case 2:
 			//16 bit displacement follows
 			current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
+			break;
 			//this math is a little bit suss
 		case 3:
 			break; //register mode (no disp)
@@ -155,9 +157,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		if (new_instruction->direction == 0) {
 			//reg is source s
 			new_instruction->source = REG;
-			new_instruction->destination = new_instruction->mod == 3 ? REG : MEM;
+			new_instruction->destination = new_instruction->mod == 3 ? REG2 : MEM;
 		} else {
-			new_instruction->source = new_instruction->mod == 3 ? REG : MEM;
+			new_instruction->source = new_instruction->mod == 3 ? REG2 : MEM;
 			new_instruction->destination = REG;
 		}
 
@@ -178,7 +180,7 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		new_instruction->imediate_value = read_data_byte(first_data_byte, new_instruction->word, assembly_file);
 			
 		new_instruction->source = IM;
-		new_instruction->destination = new_instruction->mod == 3 ? REG : MEM;
+		new_instruction->destination = new_instruction->mod == 3 ? REG2 : MEM;
 
 	} else if (match_instructions(first_byte, 4, 0b00001011)) {
 		new_instruction->type = MOV;
@@ -229,7 +231,7 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
 		
-		new_instruction->source = new_instruction->mod == 3 ? REG : MEM;
+		new_instruction->source = new_instruction->mod == 3 ? REG2 : MEM;
 		new_instruction->destination = SR;
 		
 	} else if (match_instructions(first_byte, 8, 0b10001100)) {
@@ -244,7 +246,7 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
 		
-		new_instruction->destination= new_instruction->mod == 3 ? REG : MEM;
+		new_instruction->destination= new_instruction->mod == 3 ? REG2 : MEM;
 		new_instruction->source = SR;
 		
 	} else {
@@ -255,24 +257,36 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 
 void decode(FILE * assembly_file, FILE * output_file) {
 
-	instruction *new_instruction = calloc(1,sizeof(instruction));
 	int first_byte;
 
 	if ((first_byte = getc(assembly_file)) == EOF) {
 		return;
 	}
+	
+	instruction *new_instruction = calloc(1,sizeof(instruction));
 
 	decode_instruction_type(new_instruction,first_byte,assembly_file);
-	//question. Can this thing now be turned into a string
+	print_instruction(new_instruction, output_file);
 
+	//question. Can this thing now be turned into a string
 	free(new_instruction);
+	decode(assembly_file, output_file);
 
 }
 
-void print_register(instruction * current_instruction, FILE * output_file) {
+void print_register(instruction * current_instruction, FILE * output_file, int reg_number) {
+
+	int register_source;
+
+	if (reg_number == 1) {
+		register_source = current_instruction->reg;
+	} else {
+		register_source = current_instruction->rm;
+	}
+
 	switch (current_instruction->word) {
 		case 0:
-			switch (current_instruction->reg) {
+			switch (register_source) {//current_instruction->reg) {
 				case 0:	fprintf(output_file, "AL"); break;
 				case 1:	fprintf(output_file, "CL"); break;
 				case 2:	fprintf(output_file, "DL"); break;
@@ -283,8 +297,9 @@ void print_register(instruction * current_instruction, FILE * output_file) {
 				case 7:	fprintf(output_file, "BH"); break;
 				default:printf("Invalid register contents. Exiting.\n"); exit(0); 
 			}
+			break;
 		case 1:
-			switch (current_instruction->reg) {
+			switch (register_source) { //current_instruction->reg) {
 				case 0:	fprintf(output_file, "AX"); break;
 				case 1:	fprintf(output_file, "CX"); break;
 				case 2:	fprintf(output_file, "DX"); break;
@@ -295,6 +310,7 @@ void print_register(instruction * current_instruction, FILE * output_file) {
 				case 7:	fprintf(output_file, "DI"); break;
 				default:printf("Invalid register contents. Exiting.\n"); exit(0); 
 			}
+			break;
 		default:
 			printf("Invalid word value. Exiting.\n");
 			break;
@@ -358,7 +374,8 @@ void print_accumilator(instruction * current_instruction, FILE * output_file) {
 
 void print_from_target(target target_type, instruction * current_instruction, FILE * output_file) {
 	switch (target_type) {
-		case REG: print_register(current_instruction, output_file); break;
+		case REG: print_register(current_instruction, output_file, 1); break;
+		case REG2: print_register(current_instruction, output_file, 2); break;
 		case MEM: print_memory(current_instruction, output_file); break;
 		case IM: print_memory(current_instruction, output_file); break;
 		case SR: print_segment_register(current_instruction, output_file); break;

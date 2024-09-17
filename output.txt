@@ -1,3 +1,0 @@
-;NASM assembly file.
-bits 16
-
