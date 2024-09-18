@@ -45,112 +45,19 @@ void print_instruction(instruction * current_instruction, FILE * output_file);
 void print_accumilator(instruction * current_instruction, FILE * output_file);
 void print_direct_mem(instruction * current_instruction, FILE * output_file);
 void print_from_target(target target_type, instruction * current_instruction, FILE * output_file);
-
-void print_instruction(instruction * current_instruction, FILE * output_file) {
-	switch (current_instruction->type) {
-		case (MOV):
-			print_mov_instruction(current_instruction,output_file);
-			break;
-		default:
-			printf("Invalid instruction type. Exiting.\n");
-	}
-}
-
-int get_bit(int byte, int mask, int shift) { //this feels a bit too easy
-	return (byte & mask) >> shift;	
-}
-
-int match_instructions(int byte, int count, int value) {
-	if (byte >> (8-count) == value) {
-		return 1;
-	}
-	return 0;
-}
-
-int get_next_byte(FILE * assembly_file) {
-	int next_byte;
-	if ((next_byte= getc(assembly_file)) == EOF) {
-		printf("Invalid instruction stream, EOF encountered before instruction completed.\n");
-		exit(0);
-	}
-	return next_byte;
-}
-
-//usefull for mod
-int get_highest_two_bits(int byte) {
-	return get_bit(byte, 0b11000000, 6);
-}
-
-//usefull for reg 
-int get_middle_three_bits(int byte) {
-	return get_bit(byte, 0b00111000, 3);
-} 
-
-//usefull for rm 
-int get_lowest_three_bits(int byte) {
-	return get_bit(byte, 0b00000111,0);
-} 
-
-//usefull for sr
-int get_middle_two_bits(int byte) {
-	return get_bit(byte, 0b00011000,3);
-}
-
-//reads data byte, grabs additional byte if w == 1
-int read_data_byte(int byte, int w, FILE * assembly_file) {
-	if (w == 1) {
-		//gotta read another byte and return a proper two byte int
-		int second_byte = get_next_byte(assembly_file);
-		return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
-	} else {
-		//return a single byte int 
-		return byte;
-	}
-}
-
-//really only for direct addressing as far as I understand 
-int read_address_byte(int byte, FILE * assembly_file) {
-	//gotta read another byte and return a proper two byte int
-	int second_byte = get_next_byte(assembly_file);
-	return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
-}
-
-void read_mem_displacement(instruction *current_instruction,FILE * assembly_file) {
-	switch (current_instruction->mod) {
-		case 0:
-			//if RM is 110, 16 bit displacement else none.
-			if (current_instruction->rm == 6) {
-				current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
-			}
-			break;  
-		case 1: 
-			//8 bit displacement follows -- I belive that 8 bit values need a bit of help to get signs right
-			current_instruction ->displacement = (int)(char)get_next_byte(assembly_file);
-			break;
-		case 2:
-			//16 bit displacement follows
-			current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
-			break;
-			//this math is a little bit suss
-		case 3:
-			break; //register mode (no disp)
-		default:
-			printf("Invalid memory mod field. Exiting.\n");
-			exit(0);
-	}
-}
+void set_instruction_type(instruction * new_instruction, instruction_type type, instruction_subtype subtype );
+void split_mod_sr_rm(instruction * new_instruction, int second_byte);
+void split_mod_reg_rm(instruction * new_instruction, int second_byte);
 
 void decode_instruction_type(instruction *new_instruction, int first_byte, FILE * assembly_file) {
-	if (match_instructions(first_byte, 6, 0b00100010)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = RM_RM;
+	//mov reg/mem to reg/mem
+	if (match_instructions(first_byte, 6, 0b00100010)) { 
+		set_instruction_type(new_instruction, MOV, RM_RM); 
 		new_instruction->direction = get_bit(first_byte, 2,1);
 		new_instruction->word = get_bit(first_byte, 1,0);
 
 		int second_byte = get_next_byte(assembly_file);
-		new_instruction->mod = get_highest_two_bits(second_byte);
-		new_instruction->reg= get_middle_three_bits(second_byte);
-		new_instruction->rm= get_lowest_three_bits(second_byte);
+		split_mod_reg_rm(new_instruction, second_byte);
 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
@@ -165,9 +72,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 			new_instruction->destination = REG;
 		}
 
+	//mov imediate to reg/mem
 	} else if (match_instructions(first_byte, 7, 0b01100011)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = I_RM;
+		set_instruction_type(new_instruction, MOV, I_RM);
 		new_instruction->word = get_bit(first_byte, 1,0);
 		
 		int second_byte = get_next_byte(assembly_file);
@@ -184,9 +91,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		new_instruction->source = IM;
 		new_instruction->destination = new_instruction->mod == 3 ? REG2 : MEM;
 
+	//mov imediate to register
 	} else if (match_instructions(first_byte, 4, 0b00001011)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = I_R;
+		set_instruction_type(new_instruction, MOV, I_R);
 		new_instruction->word = get_bit(first_byte, 8,3);
 		new_instruction->reg = get_lowest_three_bits(first_byte);
 
@@ -197,9 +104,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		new_instruction->source = IM;
 		new_instruction->destination = REG;
 
+	//mov memory to accumilator
 	} else if (match_instructions(first_byte, 7, 0b01010000)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = M_A;
+		set_instruction_type(new_instruction, MOV, M_A);
 		new_instruction->word = get_bit(first_byte, 1,0);
 
 		//read address
@@ -209,9 +116,9 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		new_instruction->source = DMEM;
 		new_instruction->destination = ACC;
 
+	//mov accumilator to memory 
 	} else if (match_instructions(first_byte, 7, 0b01010001)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = A_M;
+		set_instruction_type(new_instruction, MOV, A_M);
 		new_instruction->word = get_bit(first_byte, 1,0);
 
 		//read address
@@ -220,30 +127,26 @@ void decode_instruction_type(instruction *new_instruction, int first_byte, FILE 
 		
 		new_instruction->source = ACC;
 		new_instruction->destination = DMEM;
-
+	
+	//mov reg/mem to segment register
 	} else if (match_instructions(first_byte, 8, 0b10001110)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = RM_S;
+		set_instruction_type(new_instruction, MOV, RM_S);
 
 		int second_byte = get_next_byte(assembly_file);
-		new_instruction->mod = get_highest_two_bits(second_byte);
-		new_instruction->SR= get_middle_two_bits(second_byte);
-		new_instruction->rm= get_lowest_three_bits(second_byte);
+		split_mod_sr_rm(new_instruction, second_byte);
 
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
 		
 		new_instruction->source = new_instruction->mod == 3 ? REG2 : MEM;
 		new_instruction->destination = SR;
-		
+
+	//mov segment register to reg/mem
 	} else if (match_instructions(first_byte, 8, 0b10001100)) {
-		new_instruction->type = MOV;
-		new_instruction->subtype = SR_RM;
+		set_instruction_type(new_instruction, MOV, SR_RM);
 
 		int second_byte = get_next_byte(assembly_file);
-		new_instruction->mod = get_highest_two_bits(second_byte);
-		new_instruction->SR= get_middle_two_bits(second_byte);
-		new_instruction->rm= get_lowest_three_bits(second_byte);
+		split_mod_sr_rm(new_instruction, second_byte);
 		
 		//determine if the last two data bits will be read or something.
 		read_mem_displacement(new_instruction,assembly_file);
@@ -412,6 +315,117 @@ void print_mov_instruction(instruction * current_instruction, FILE * output_file
 	fprintf(output_file, "\n");
 }
 
+//usefull for mod
+int get_highest_two_bits(int byte) {
+	return get_bit(byte, 0b11000000, 6);
+}
+
+//usefull for reg 
+int get_middle_three_bits(int byte) {
+	return get_bit(byte, 0b00111000, 3);
+} 
+
+//usefull for rm 
+int get_lowest_three_bits(int byte) {
+	return get_bit(byte, 0b00000111,0);
+} 
+
+//usefull for sr
+int get_middle_two_bits(int byte) {
+	return get_bit(byte, 0b00011000,3);
+}
+
+//reads data byte, grabs additional byte if w == 1
+int read_data_byte(int byte, int w, FILE * assembly_file) {
+	if (w == 1) {
+		//gotta read another byte and return a proper two byte int
+		int second_byte = get_next_byte(assembly_file);
+		return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
+	} else {
+		//return a single byte int 
+		return byte;
+	}
+}
+
+//really only for direct addressing as far as I understand 
+int read_address_byte(int byte, FILE * assembly_file) {
+	//gotta read another byte and return a proper two byte int
+	int second_byte = get_next_byte(assembly_file);
+	return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
+}
+
+void read_mem_displacement(instruction *current_instruction,FILE * assembly_file) {
+	switch (current_instruction->mod) {
+		case 0:
+			//if RM is 110, 16 bit displacement else none.
+			if (current_instruction->rm == 6) {
+				current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
+			}
+			break;  
+		case 1: 
+			//8 bit displacement follows -- I belive that 8 bit values need a bit of help to get signs right
+			current_instruction ->displacement = (int)(char)get_next_byte(assembly_file);
+			break;
+		case 2:
+			//16 bit displacement follows
+			current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
+			break;
+			//this math is a little bit suss
+		case 3:
+			break; //register mode (no disp)
+		default:
+			printf("Invalid memory mod field. Exiting.\n");
+			exit(0);
+	}
+}
+
+void set_instruction_type(instruction * new_instruction, instruction_type type, instruction_subtype subtype ) {
+	new_instruction->type = type;
+	new_instruction->subtype = subtype;
+}
+
+void split_mod_reg_rm(instruction * new_instruction, int second_byte) {
+	new_instruction->mod = get_highest_two_bits(second_byte);
+	new_instruction->reg= get_middle_three_bits(second_byte);
+	new_instruction->rm= get_lowest_three_bits(second_byte);
+}
+
+void split_mod_sr_rm(instruction * new_instruction, int second_byte) {
+	new_instruction->mod = get_highest_two_bits(second_byte);
+	new_instruction->SR= get_middle_two_bits(second_byte);
+	new_instruction->rm= get_lowest_three_bits(second_byte);
+}
+
+void print_instruction(instruction * current_instruction, FILE * output_file) {
+	switch (current_instruction->type) {
+		case (MOV):
+			print_mov_instruction(current_instruction,output_file);
+			break;
+		default:
+			printf("Invalid instruction type. Exiting.\n");
+	}
+}
+
+int get_bit(int byte, int mask, int shift) { //this feels a bit too easy
+	return (byte & mask) >> shift;	
+}
+
+int match_instructions(int byte, int count, int value) {
+	if (byte >> (8-count) == value) {
+		return 1;
+	}
+	return 0;
+}
+
+int get_next_byte(FILE * assembly_file) {
+	int next_byte;
+	if ((next_byte= getc(assembly_file)) == EOF) {
+		printf("Invalid instruction stream, EOF encountered before instruction completed.\n");
+		exit(0);
+	}
+	return next_byte;
+}
+
 int main(int argc, char * argv []) {
 
 	if (argc != 2 && argc != 3) {
@@ -446,3 +460,5 @@ int main(int argc, char * argv []) {
 	fclose(output_stream); //this may be sketchy but seems to work fine.
 
 }
+
+
