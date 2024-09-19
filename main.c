@@ -1,431 +1,366 @@
+#include <locale.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {MOV} instruction_type;
-typedef enum {RM_RM, I_RM, I_R, M_A, A_M, RM_S, SR_RM} instruction_subtype;
-typedef enum {REG, REG2, MEM, IM, SR, ACC, DMEM} target;
+//OVERALL, I THINK THIS IS THE VERION THAT I AM HAPPY TO STICK WITH. ALL THE CORE FEATURES ARE THERE AND I DON'T THINK THERE ARE OBVIOUS DESTRUCTIVE ISSUES GOING ON. 
+//I WANT TO SPLIT PRINTING, DECODING, AND RUNNING INTO SEPERATE FILES ONCE POSSIBLE
+//I SUSPECT THAT THERE ARE SOME ISSUES WITH DATA TYPES. SPECIFICALLY SIGNS ON THE SHORTER INTEGER TYPES
+//ALSO PRINGTING THE SHORT INTEGER TYPES IS WEIRD.
+//NEXT STEP IS MAKING SURE THAT THE FIRST INSTRUCTION IS FUNCTIONAL IN ALL THE WAYS IT HAS TO BE 
+//AFTER THAT ADD AS MANY INSTRUCTIONS AS YOU CAN.
+//THIS SHOULD BE A PRETTY SOLID API.
+
+typedef enum {MOV} instruction_type; //,PUSH, POP
+typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT} target;
+typedef enum {EXIT_ON_EOF, ERROR_ON_EOF} read_behaviour;
+typedef enum {INVALID = 0, VALID = 1} validity;
+typedef enum {NON_INVERTED, INVERTED} source_inversion;
+typedef enum {NA,ARG_1_SOURCE, ARG_2_SOURCE} arg_order;
+typedef enum {SOURCE, DEST} print_type;
+
+typedef struct instruction_byte {
+	uint8_t byte;
+	validity valid;
+} instruction_byte;
+
+typedef struct instruction_stream {
+	instruction_byte instruction_bytes[6];
+} instruction_stream;
 
 typedef struct instruction {
 	instruction_type type;
-	instruction_subtype subtype;
-	int direction;
-	int word;
-	int mod; 
-	int rm;
-	int reg;
-	int displacement;
-	int imediate_value;
-	int SR;
-	//the following are derrived items
-	target source;
-	target destination;
+	arg_order order;	
+
+	target arg_one_type; 	
+	target arg_two_type; 
+	
+	uint16_t register_one;
+	uint16_t register_two;
+
+	uint16_t data_one;
+	uint16_t data_two;
+
+	uint16_t mod;
+	uint16_t d;
+	uint16_t w;
+	uint16_t s;
+	uint16_t v;
+	uint16_t z;
 } instruction;
 
-void decode(FILE * assembly_file, FILE * output_file);
-void decode_instruction_type(instruction *new_instruction, int first_byte, FILE * assembly_file);
-int match_instructions(int byte, int count, int value);
-int get_bit(int byte, int mask, int shift); //carefull 0 is the least significant bit 
-int get_next_byte(FILE * assembly_file);
-int get_highest_two_bits(int byte);
-int get_middle_three_bits(int byte);
-int get_lowest_three_bits(int byte);
-int get_middle_two_bits(int byte);
-int read_address_byte(int byte, FILE * assembly_file);
-int read_data_byte(int byte, int w, FILE * assembly_file);
-void read_mem_displacement(instruction *current_instruction,FILE * assembly_file);
-void print_register(instruction * current_instruction, FILE * output_file, int reg_number);
-void print_value(instruction * current_instruction, FILE * output_file);
-void print_segment_register(instruction * current_instruction, FILE * output_file);
-void print_memory(instruction * current_instruction, FILE * output_file);
-void print_mov_instruction(instruction * current_instruction, FILE * output_file);
-void print_instruction(instruction * current_instruction, FILE * output_file);
-void print_accumilator(instruction * current_instruction, FILE * output_file);
-void print_direct_mem(instruction * current_instruction, FILE * output_file);
-void print_from_target(target target_type, instruction * current_instruction, FILE * output_file);
-void set_instruction_type(instruction * new_instruction, instruction_type type, instruction_subtype subtype );
-void split_mod_sr_rm(instruction * new_instruction, int second_byte);
-void split_mod_reg_rm(instruction * new_instruction, int second_byte);
+void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream);
+instruction_byte get_next_instruction_byte(FILE * assembly_file);
+instruction_stream * initialize_instruction_stream(FILE * assembly_file);
+int match_instruction_to_stream(char * first_byte, char * second_byte, instruction_stream * stream);
+void instruction_stream_pop_byte(instruction_stream * stream, FILE * assembly_file);
+void instructin_stream_pop_n_bytes(instruction_stream * stream, FILE * assembly_file, int n_increments);
+int match_byte(instruction_byte byte, char * match_string);
+uint8_t mask(uint8_t byte, uint8_t mask, uint8_t shift);
+void decode_regmem_to_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file);
 
-void decode_instruction_type(instruction *new_instruction, int first_byte, FILE * assembly_file) {
-	//mov reg/mem to reg/mem
-	if (match_instructions(first_byte, 6, 0b00100010)) { 
-		set_instruction_type(new_instruction, MOV, RM_RM); 
-		new_instruction->direction = get_bit(first_byte, 2,1);
-		new_instruction->word = get_bit(first_byte, 1,0);
+instruction_byte get_next_instruction_byte(FILE * assembly_file) {
+	instruction_byte new_byte;
+	int readable_int;
 
-		int second_byte = get_next_byte(assembly_file);
-		split_mod_reg_rm(new_instruction, second_byte);
+	if ((readable_int = getc(assembly_file)) == -1) {
+		new_byte.valid = INVALID;
+		new_byte.byte = 0;
+		assembly_file -= sizeof(char);
+	}
 
-		//determine if the last two data bits will be read or something.
-		read_mem_displacement(new_instruction,assembly_file);
+	new_byte.valid = INVALID;
+	new_byte.byte = (uint8_t) readable_int;
 
-		//this branch statement is unique to this subtype
-		if (new_instruction->direction == 0) {
-			//reg is source s
-			new_instruction->source = REG;
-			new_instruction->destination = new_instruction->mod == 3 ? REG2 : MEM;
-		} else {
-			new_instruction->source = new_instruction->mod == 3 ? REG2 : MEM;
-			new_instruction->destination = REG;
+	return new_byte;
+}
+
+instruction_stream * initialize_instruction_stream(FILE * assembly_file) {
+	instruction_stream * new_stream = calloc(1, sizeof(instruction_stream));
+
+	for (int i = 0; i < 6; i ++) {
+		new_stream->instruction_bytes[i] = get_next_instruction_byte(assembly_file);
+	}
+
+	return new_stream;
+}
+
+void instruction_stream_pop_byte(instruction_stream * stream, FILE * assembly_file) {
+	for (int i = 0; i < 5; i ++) {
+		stream->instruction_bytes[i] = stream->instruction_bytes[i+1];
+	}
+	stream->instruction_bytes[5] = get_next_instruction_byte(assembly_file);
+}
+
+void instructin_stream_pop_n_bytes(instruction_stream * stream, FILE * assembly_file, int n_increments) {
+	for (int i = 0; i < n_increments; i ++)	{
+		instruction_stream_pop_byte(stream, assembly_file);
+	}
+}
+
+int match_byte(instruction_byte byte, char * match_string) {
+
+	if (byte.valid == INVALID) {
+		return 0;
+	}
+
+	for (int i = 0; i < 8; i++) {
+		uint8_t bit_value = (byte.byte >> (7-i)) & ((uint8_t) 0b00000001);
+		if ((bit_value == 1 && match_string[i] == '0') || (bit_value == 0 && match_string[i] == '1')) {
+			return 0;
 		}
-
-	//mov imediate to reg/mem
-	} else if (match_instructions(first_byte, 7, 0b01100011)) {
-		set_instruction_type(new_instruction, MOV, I_RM);
-		new_instruction->word = get_bit(first_byte, 1,0);
-		
-		int second_byte = get_next_byte(assembly_file);
-		new_instruction->mod = get_highest_two_bits(second_byte);
-		new_instruction->rm= get_lowest_three_bits(second_byte);
-		
-		//determine if the last two data bits will be read or something.
-		read_mem_displacement(new_instruction,assembly_file);
-
-		//this case can actually have another couple of direct data bytes. Crazy ass instruction to be honest
-		int first_data_byte = get_next_byte(assembly_file); 
-		new_instruction->imediate_value = read_data_byte(first_data_byte, new_instruction->word, assembly_file);
-			
-		new_instruction->source = IM;
-		new_instruction->destination = new_instruction->mod == 3 ? REG2 : MEM;
-
-	//mov imediate to register
-	} else if (match_instructions(first_byte, 4, 0b00001011)) {
-		set_instruction_type(new_instruction, MOV, I_R);
-		new_instruction->word = get_bit(first_byte, 8,3);
-		new_instruction->reg = get_lowest_three_bits(first_byte);
-
-		//read data... this one is next
-		int second_byte = get_next_byte(assembly_file); 
-		new_instruction->imediate_value = read_data_byte(second_byte, new_instruction->word, assembly_file);
-
-		new_instruction->source = IM;
-		new_instruction->destination = REG;
-
-	//mov memory to accumilator
-	} else if (match_instructions(first_byte, 7, 0b01010000)) {
-		set_instruction_type(new_instruction, MOV, M_A);
-		new_instruction->word = get_bit(first_byte, 1,0);
-
-		//read address
-		int second_byte = get_next_byte(assembly_file); 
-		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
-
-		new_instruction->source = DMEM;
-		new_instruction->destination = ACC;
-
-	//mov accumilator to memory 
-	} else if (match_instructions(first_byte, 7, 0b01010001)) {
-		set_instruction_type(new_instruction, MOV, A_M);
-		new_instruction->word = get_bit(first_byte, 1,0);
-
-		//read address
-		int second_byte = get_next_byte(assembly_file); 
-		new_instruction->imediate_value = read_address_byte(second_byte, assembly_file);
-		
-		new_instruction->source = ACC;
-		new_instruction->destination = DMEM;
-	
-	//mov reg/mem to segment register
-	} else if (match_instructions(first_byte, 8, 0b10001110)) {
-		set_instruction_type(new_instruction, MOV, RM_S);
-
-		int second_byte = get_next_byte(assembly_file);
-		split_mod_sr_rm(new_instruction, second_byte);
-
-		//determine if the last two data bits will be read or something.
-		read_mem_displacement(new_instruction,assembly_file);
-		
-		new_instruction->source = new_instruction->mod == 3 ? REG2 : MEM;
-		new_instruction->destination = SR;
-
-	//mov segment register to reg/mem
-	} else if (match_instructions(first_byte, 8, 0b10001100)) {
-		set_instruction_type(new_instruction, MOV, SR_RM);
-
-		int second_byte = get_next_byte(assembly_file);
-		split_mod_sr_rm(new_instruction, second_byte);
-		
-		//determine if the last two data bits will be read or something.
-		read_mem_displacement(new_instruction,assembly_file);
-		
-		new_instruction->destination= new_instruction->mod == 3 ? REG2 : MEM;
-		new_instruction->source = SR;
-		
-	} else {
-		printf("Encountered an unknown instruction code.\n");
-		exit(0);
-	}
-}
-
-void decode(FILE * assembly_file, FILE * output_file) {
-
-	int first_byte;
-
-	if ((first_byte = getc(assembly_file)) == EOF) {
-		return;
-	}
-	
-	instruction *new_instruction = calloc(1,sizeof(instruction));
-
-	decode_instruction_type(new_instruction,first_byte,assembly_file);
-	print_instruction(new_instruction, output_file);
-
-	//question. Can this thing now be turned into a string
-	free(new_instruction);
-	decode(assembly_file, output_file);
-
-}
-
-void print_register(instruction * current_instruction, FILE * output_file, int reg_number) {
-
-	int register_source;
-
-	if (reg_number == 1) {
-		register_source = current_instruction->reg;
-	} else {
-		register_source = current_instruction->rm;
 	}
 
-	switch (current_instruction->word) {
-		case 0:
-			switch (register_source) {//current_instruction->reg) {
-				case 0:	fprintf(output_file, "AL"); break;
-				case 1:	fprintf(output_file, "CL"); break;
-				case 2:	fprintf(output_file, "DL"); break;
-				case 3:	fprintf(output_file, "BL"); break;
-				case 4:	fprintf(output_file, "AH"); break;
-				case 5:	fprintf(output_file, "CH"); break;
-				case 6:	fprintf(output_file, "DH"); break;
-				case 7:	fprintf(output_file, "BH"); break;
-				default:printf("Invalid register contents. Exiting.\n"); exit(0); 
-			}
-			break;
-		case 1:
-			switch (register_source) { //current_instruction->reg) {
-				case 0:	fprintf(output_file, "AX"); break;
-				case 1:	fprintf(output_file, "CX"); break;
-				case 2:	fprintf(output_file, "DX"); break;
-				case 3:	fprintf(output_file, "BX"); break;
-				case 4:	fprintf(output_file, "SP"); break;
-				case 5:	fprintf(output_file, "BP"); break;
-				case 6:	fprintf(output_file, "SI"); break; //kind of unclear if these mean SI or DI
-				case 7:	fprintf(output_file, "DI"); break;
-				default:printf("Invalid register contents. Exiting.\n"); exit(0); 
-			}
-			break;
-		default:
-			printf("Invalid word value. Exiting.\n");
-			break;
-	}		
+	return 1;
+
 }
 
-void print_value(instruction * current_instruction, FILE * output_file) {
-	//unsure if this thing should go in brackets or something
-	if (current_instruction->destination == MEM) {
-		//print word or byte	
-		if (current_instruction->word == 1) {
-			fprintf(output_file,"word "); 
-		} else {
-			fprintf(output_file,"byte "); 
-		}
-	} 
+//cool in my opinion. matches based on "11x01x01", "xxx11xxxx"
+int match_instruction_to_stream(char * first_byte, char * second_byte, instruction_stream * stream) {
+	int first_byte_valid = match_byte(stream->instruction_bytes[0], first_byte);
 
-	fprintf(output_file,"%d",current_instruction->imediate_value); 
-}
-
-void print_direct_mem(instruction * current_instruction, FILE * output_file) {
-	fprintf(output_file,"[%d]",current_instruction->imediate_value); 
-}
-
-void print_memory(instruction * current_instruction, FILE * output_file) {
-
-	char plus = '+';
-
-	switch (current_instruction->mod) {
-		case 0: 
-			switch (current_instruction->rm) {
-				case 0: fprintf(output_file, "[BX + SI]"); break;
-				case 1: fprintf(output_file, "[BX + DI]"); break;
-				case 2: fprintf(output_file, "[BP + SI]"); break;
-				case 3: fprintf(output_file, "[BP + DI]"); break;
-				case 4: fprintf(output_file, "[SI]"); break;
-				case 5: fprintf(output_file, "[DI]"); break;
-				case 6: fprintf(output_file, "[%d]", current_instruction->displacement); break;
-				case 7: fprintf(output_file, "[BX]"); break;
-			}
-		break;
-		case 1:
-		case 2:
-			if ((int16_t)current_instruction->displacement < 0) {plus = ' ';}
-			//8 and 16 bit value variants are functionally identical
-			switch (current_instruction->rm) {
-				case 0: fprintf(output_file, "[BX + SI %c%hd]", plus, current_instruction->displacement); break;
-				case 1: fprintf(output_file, "[BX + DI %c%hd]",plus,  current_instruction->displacement); break;
-				case 2: fprintf(output_file, "[BP + SI %c%hd]",plus,  current_instruction->displacement); break;
-				case 3: fprintf(output_file, "[BP + DI %c%hd]",plus,  current_instruction->displacement); break;
-				case 4: fprintf(output_file, "[SI %c%hd]", plus, current_instruction->displacement); break;
-				case 5: fprintf(output_file, "[DI %c%hd]",plus,  current_instruction->displacement); break;
-				case 6: fprintf(output_file, "[BP %c%hd]",plus,  current_instruction->displacement); break;
-				case 7: fprintf(output_file, "[BX %c%hd]", plus, current_instruction->displacement); break;
-				default:printf("Invalid RM value. Exiting.\n"); exit(0);
-			}
-		break;
-		default:
-			printf("Invalid MOD found. Exiting.\n");
-			exit(0);
-	}	
-}
-
-void print_segment_register(instruction * current_instruction, FILE * output_file) {
-	switch (current_instruction->SR) {
-		case 0: fprintf(output_file,"ES"); break;
-		case 1: fprintf(output_file,"CS"); break;
-		case 2: fprintf(output_file,"SS"); break;
-		case 3: fprintf(output_file,"DS"); break;
-		default: fprintf(output_file, "Invalid SR value. Exiting. \n"); exit(0);
+	if (second_byte == NULL) {
+		return first_byte_valid;
 	}
+
+	int second_byte_valid = match_byte(stream->instruction_bytes[1], second_byte);
+
+	return first_byte_valid && second_byte_valid;
 }
 
-void print_accumilator(instruction * current_instruction, FILE * output_file) {
-	//simply do not know enought about this kind of assembly to know if AH and AL are accessible in this instruction.
-	fprintf(output_file,"AX");
+uint8_t mask(uint8_t byte, uint8_t mask, uint8_t shift) {
+	return (byte & mask) >> shift;
 }
 
-void print_from_target(target target_type, instruction * current_instruction, FILE * output_file) {
-	switch (target_type) {
-		case REG: print_register(current_instruction, output_file, 1); break;
-		case REG2: print_register(current_instruction, output_file, 2); break;
-		case MEM: print_memory(current_instruction, output_file); break;
-		case DMEM: print_direct_mem(current_instruction, output_file); break;
-		case IM: print_value(current_instruction, output_file); break;
-		case SR: print_segment_register(current_instruction, output_file); break;
-		case ACC: print_accumilator(current_instruction, output_file); break;
-		default: printf("Invalid instruction target type. Exiting.\n"); exit(0);
-	}	
-}
+//this should be the hardest decode!
+void decode_regmem_to_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 2;
 
-void print_mov_instruction(instruction * current_instruction, FILE * output_file) {
-	fprintf(output_file, "mov ");
-	print_from_target(current_instruction->destination, current_instruction, output_file);
-	fprintf(output_file, ", ");
-	print_from_target(current_instruction->source, current_instruction, output_file);
-	fprintf(output_file, "\n");
-}
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
 
-//usefull for mod
-int get_highest_two_bits(int byte) {
-	return get_bit(byte, 0b11000000, 6);
-}
-
-//usefull for reg 
-int get_middle_three_bits(int byte) {
-	return get_bit(byte, 0b00111000, 3);
-} 
-
-//usefull for rm 
-int get_lowest_three_bits(int byte) {
-	return get_bit(byte, 0b00000111,0);
-} 
-
-//usefull for sr
-int get_middle_two_bits(int byte) {
-	return get_bit(byte, 0b00011000,3);
-}
-
-//reads data byte, grabs additional byte if w == 1
-int read_data_byte(int byte, int w, FILE * assembly_file) {
-	if (w == 1) {
-		//gotta read another byte and return a proper two byte int
-		int second_byte = get_next_byte(assembly_file);
-		return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
-	} else {
-		//return a single byte int 
-		return byte;
-	}
-}
-
-//really only for direct addressing as far as I understand 
-int read_address_byte(int byte, FILE * assembly_file) {
-	//gotta read another byte and return a proper two byte int
-	int second_byte = get_next_byte(assembly_file);
-	return byte + (second_byte << 8); //this is suspect. also not clear if endianness will cause errors
-}
-
-void read_mem_displacement(instruction *current_instruction,FILE * assembly_file) {
-	switch (current_instruction->mod) {
-		case 0:
-			//if RM is 110, 16 bit displacement else none.
-			if (current_instruction->rm == 6) {
-				current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
-			}
-			break;  
-		case 1: 
-			//8 bit displacement follows -- I belive that 8 bit values need a bit of help to get signs right
-			current_instruction ->displacement = (int)(char)get_next_byte(assembly_file);
-			break;
-		case 2:
-			//16 bit displacement follows
-			current_instruction ->displacement =  get_next_byte(assembly_file) + (get_next_byte(assembly_file) << 8);
-			break;
-			//this math is a little bit suss
-		case 3:
-			break; //register mode (no disp)
-		default:
-			printf("Invalid memory mod field. Exiting.\n");
-			exit(0);
-	}
-}
-
-void set_instruction_type(instruction * new_instruction, instruction_type type, instruction_subtype subtype ) {
 	new_instruction->type = type;
-	new_instruction->subtype = subtype;
+	new_instruction->d = mask(byte_one, 0b00000010, 1);
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->mod = mask(byte_two, 0b11000000, 6); 
+	new_instruction->register_one= mask(byte_two, 0b00111000, 3);
+	new_instruction->register_two= mask(byte_two, 0b00000111, 0);
+	new_instruction->arg_one_type = REG;
+
+	//order is a bit uggly
+	if (new_instruction->d == 0) {
+		new_instruction->order = ARG_1_SOURCE;
+	} else {
+		new_instruction->order = ARG_2_SOURCE;
+	}
+
+	//1 THIS IS A MESS
+	//2 THIS PROBABLY HAS A BUG: THE 8BIT REPRESENTATION IS PROBABLY NOT GOING TO PLAY NICE FOR NEGATIVE NUMBERS
+	if (new_instruction->mod == 0 && new_instruction->register_two!= 6) {
+		new_instruction->arg_two_type= MEM;
+	} else if (new_instruction->mod == 1) {
+		instruction_length = 3;
+		new_instruction->data_two = (instructions->instruction_bytes[2].byte << 8) + (instructions->instruction_bytes[1].byte);
+		new_instruction->arg_two_type= MEM_8;
+	} else if (new_instruction->mod == 2) {
+		instruction_length = 4;
+		new_instruction->data_two= instructions->instruction_bytes[3].byte;
+		new_instruction->arg_two_type= MEM_16;
+	} else if ((new_instruction->mod == 0 && new_instruction->register_two == 6)) {
+		instruction_length = 4;
+		new_instruction->data_two= instructions->instruction_bytes[3].byte;
+		new_instruction->arg_two_type= DIRECT;
+	} else if (new_instruction->mod == 3) {
+		new_instruction->arg_two_type= REG;
+	}
+
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
-void split_mod_reg_rm(instruction * new_instruction, int second_byte) {
-	new_instruction->mod = get_highest_two_bits(second_byte);
-	new_instruction->reg= get_middle_three_bits(second_byte);
-	new_instruction->rm= get_lowest_three_bits(second_byte);
-}
-
-void split_mod_sr_rm(instruction * new_instruction, int second_byte) {
-	new_instruction->mod = get_highest_two_bits(second_byte);
-	new_instruction->SR= get_middle_two_bits(second_byte);
-	new_instruction->rm= get_lowest_three_bits(second_byte);
-}
-
-void print_instruction(instruction * current_instruction, FILE * output_file) {
-	switch (current_instruction->type) {
-		case (MOV):
-			print_mov_instruction(current_instruction,output_file);
-			break;
-		default:
-			printf("Invalid instruction type. Exiting.\n");
+void print_reg(uint16_t reg, uint16_t data, uint8_t w, FILE * output_stream) {
+	if (w == 0) {
+		switch (reg) {
+			case 0: fprintf(output_stream, "al"); break;	
+			case 1: fprintf(output_stream, "cl"); break;	
+			case 2: fprintf(output_stream, "dl"); break;	
+			case 3: fprintf(output_stream, "bl"); break;	
+			case 4: fprintf(output_stream, "ah"); break;	
+			case 5: fprintf(output_stream, "ch"); break;	
+			case 6: fprintf(output_stream, "dh"); break;	
+			case 7: fprintf(output_stream, "bh"); break;	
+		}
+	} else if (w == 1) {
+		switch (reg) {
+			case 0: fprintf(output_stream, "ax"); break;	
+			case 1: fprintf(output_stream, "cx"); break;	
+			case 2: fprintf(output_stream, "dx"); break;	
+			case 3: fprintf(output_stream, "bx"); break;	
+			case 4: fprintf(output_stream, "sp"); break;	
+			case 5: fprintf(output_stream, "bp"); break;	
+			case 6: fprintf(output_stream, "si"); break;	
+			case 7: fprintf(output_stream, "di"); break;	
+		}
 	}
 }
 
-int get_bit(int byte, int mask, int shift) { //this feels a bit too easy
-	return (byte & mask) >> shift;	
+void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream) {
+	fprintf(output_stream, "[%d]", data);
 }
 
-int match_instructions(int byte, int count, int value) {
-	if (byte >> (8-count) == value) {
-		return 1;
+void print_mem(uint16_t reg, FILE * output_stream) {
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si]"); break;	
+		case 1: fprintf(output_stream, "[bx + di]"); break;	
+		case 2: fprintf(output_stream, "[bp + si]"); break;	
+		case 3: fprintf(output_stream, "[bp + di]"); break;	
+		case 4: fprintf(output_stream, "[si]"); break;	
+		case 5: fprintf(output_stream, "[di]"); break;	
+		case 6: fprintf(output_stream, "error"); break;	
+		case 7: fprintf(output_stream, "[bx]"); break;	
 	}
-	return 0;
 }
 
-int get_next_byte(FILE * assembly_file) {
-	int next_byte;
-	if ((next_byte= getc(assembly_file)) == EOF) {
-		printf("Invalid instruction stream, EOF encountered before instruction completed.\n");
-		exit(0);
+void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream) {
+	uint8_t signed_data = data;	
+
+	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
+	///I THINK THE LOGIC IS RIGHT, IF ANYTHING MASSAGE THE TYPES AND PRINT TYPES
+
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si"); break;	
+		case 1: fprintf(output_stream, "[bx + di"); break;	
+		case 2: fprintf(output_stream, "[bp + si"); break;	
+		case 3: fprintf(output_stream, "[bp + di"); break;	
+		case 4: fprintf(output_stream, "[si"); break;	
+		case 5: fprintf(output_stream, "[di"); break;	
+		case 6: fprintf(output_stream, "[bp"); break;	
+		case 7: fprintf(output_stream, "[bx"); break;	
 	}
-	return next_byte;
+
+	if (signed_data > 0) {
+		fprintf(output_stream, " + %d]", signed_data);
+	} else {
+		fprintf(output_stream, " - %d]", -signed_data);
+	}
 }
 
+void print_mem_16(uint16_t reg, uint16_t data, FILE * output_stream) {
+	uint8_t signed_data = data;	
+
+	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
+	///I THINK THE LOGIC IS RIGHT, IF ANYTHING MASSAGE THE TYPES AND PRINT TYPES
+
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si"); break;	
+		case 1: fprintf(output_stream, "[bx + di"); break;	
+		case 2: fprintf(output_stream, "[bp + si"); break;	
+		case 3: fprintf(output_stream, "[bp + di"); break;	
+		case 4: fprintf(output_stream, "[si"); break;	
+		case 5: fprintf(output_stream, "[di"); break;	
+		case 6: fprintf(output_stream, "[bp"); break;	
+		case 7: fprintf(output_stream, "[bx"); break;	
+	}
+
+	if (signed_data > 0) {
+		fprintf(output_stream, " + %d]", signed_data);
+	} else {
+		fprintf(output_stream, " - %d]", -signed_data);
+	}
+}
+
+void print_instruction_half(instruction * new_instruction, FILE * output_stream, print_type print_target) {
+	target print_type; 	
+	target opposite_type; 	
+	uint16_t print_register;
+	uint16_t print_data;
+
+	if ((new_instruction->order == ARG_1_SOURCE && print_target == SOURCE) || (new_instruction->order == ARG_2_SOURCE && print_target == DEST)) {
+		print_type = new_instruction->arg_one_type;
+		opposite_type = new_instruction->arg_two_type; 	
+		print_register = new_instruction->register_one;
+		print_data= new_instruction->data_one;
+	} else {
+		print_type = new_instruction->arg_two_type;
+		opposite_type = new_instruction->arg_one_type; 	
+		print_register = new_instruction->register_two;
+		print_data= new_instruction->data_two;
+	}
+
+	//little something to determine if the imediate register's length must be printed.
+	int print_imediate_length = 0;	
+	if (print_target == SOURCE && opposite_type== MEM && (print_type == IM8 || print_type == IM16)) {
+		print_imediate_length = 1;	
+	}
+
+	switch (print_type) {
+		case REG: print_reg(print_register, print_data, new_instruction->w, output_stream); break;
+		case MEM: print_mem(print_register, output_stream); break;
+		case MEM_8: print_mem_8(print_register, print_data, output_stream); break;
+		case MEM_16: print_mem_16(print_register, print_data, output_stream); break;
+		case DIRECT: print_direct_address(print_register, print_data, output_stream); break;
+		default: printf("Error"); break;
+	}	
+
+}
+
+void print_move(instruction * new_instruction, FILE * output_stream) {
+	fprintf(output_stream, "mov ");
+
+	print_instruction_half(new_instruction, output_stream, DEST);
+	fprintf(output_stream, ", ");
+	print_instruction_half(new_instruction, output_stream, SOURCE);
+
+	fprintf(output_stream, "\n");
+}
+
+void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
+
+	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
+	instruction * new_instruction = calloc(1, sizeof(instruction));
+
+	//mov register/memory to/from register
+	if (match_instruction_to_stream("100010xx", NULL, instructions)) {
+		decode_regmem_to_regmem(MOV,instructions, new_instruction, assembly_file); 
+	//mov imediate to register/memory
+	} else if (match_instruction_to_stream("1100011x", "xx000xxx", instructions)) {
+		//decode_im_to_regmem(MOV,instructions, new_instruction, assembly_file); 
+	//mov imediate to register
+	} else if (match_instruction_to_stream("1011xxxx", NULL, instructions)) {
+		//decode_im_to_reg(MOV,instructions, new_instruction, assembly_file); 
+	//mov memory to accumulator
+	} else if (match_instruction_to_stream("1010000x", NULL, instructions)) {
+		//decode_im_to_reg(MOV,instructions, INVERTED); 
+	//mov accumilator to memory 
+	} else if (match_instruction_to_stream("1010001x", NULL, instructions)) {
+		//decode_acc_to_mem(MOV,instructions); 
+	//mov register/memory to segment register
+	} else if (match_instruction_to_stream("10001110", "xx0xxxxx", instructions)) {
+		//decode_regmem_to_seg(MOV,instructions, NON_INVERTED); 
+	//mov segment register to register/memory
+	} else if (match_instruction_to_stream("10001100", "xx0xxxxx", instructions)) {
+		//decode_regmem_to_seg(MOV,instructions, INVERTED); 
+	}
+
+	switch (new_instruction->type) {
+		case MOV:
+			print_move(new_instruction, output_stream);
+		break;
+	}
+	//print the instruction
+	//execute the instruciton
+	
+	free(new_instruction);
+
+	//at this point the instruction stream has been updated.
+	if (instructions->instruction_bytes[0].valid == VALID) {
+		decode(instructions, assembly_file, output_stream);
+	}
+}
+
+//now that bytes can be matched with ease, identifying instructions should be easy. From there on decoding can be solved!
+//First, orgonize and test some things!
 int main(int argc, char * argv []) {
 
 	if (argc != 2 && argc != 3) {
@@ -454,7 +389,11 @@ int main(int argc, char * argv []) {
 	fprintf(output_stream,";NASM assembly file.\n");
 	fprintf(output_stream,"bits 16\n\n");
 
-	decode(assembly_file, output_stream);
+	instruction_stream * instructions = initialize_instruction_stream(assembly_file);
+
+	decode(instructions, assembly_file,output_stream);
+
+	free(instructions); //don't think the array needs to be seperately feed
 
 	fclose(assembly_file);
 	fclose(output_stream); //this may be sketchy but seems to work fine.
