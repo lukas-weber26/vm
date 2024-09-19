@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {MOV} instruction_type; //,PUSH, POP
-typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT} target;
+typedef enum {MOV, PUSH, POP} instruction_type; //,PUSH, POP
+typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT, NONE} target;
 typedef enum {EXIT_ON_EOF, ERROR_ON_EOF} read_behaviour;
 typedef enum {INVALID = 0, VALID = 1} validity;
 typedef enum {NON_INVERTED, INVERTED} source_inversion;
@@ -52,13 +52,9 @@ int match_byte(instruction_byte byte, char * match_string);
 uint8_t mask(uint8_t byte, uint8_t mask, uint8_t shift);
 
 //printing
-void print_reg(uint16_t reg, uint16_t data, uint8_t w, FILE * output_stream);
-void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream);
-void print_mem(uint16_t reg, FILE * output_stream);
-void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream);
-void print_mem_16(uint16_t reg, uint16_t data, FILE * output_stream);
-void print_instruction_half(instruction * new_instruction, FILE * output_stream, print_type print_target);
-void print_move(instruction * new_instruction, FILE * output_stream);
+void print_two_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
+void print_one_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
+void print_zero_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
 
 //decoding
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream);

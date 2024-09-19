@@ -1,4 +1,5 @@
 #include "disassembler.h"
+#include <stdio.h>
 
 typedef enum {PRINT, NO_PRINT} print_imediate_length;
 
@@ -28,7 +29,10 @@ void print_reg(uint16_t reg, uint16_t data, uint8_t w, FILE * output_stream) {
 	}
 }
 
-void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream) {
+void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream,print_imediate_length print) {
+	if (print == PRINT) {
+		fprintf(output_stream, "word ");
+	} 
 	fprintf(output_stream, "[%d]", data);
 }
 
@@ -54,7 +58,11 @@ void print_im_16(uint16_t data, FILE * output_stream, print_imediate_length prin
 	}
 }
 
-void print_mem(uint16_t reg, FILE * output_stream) {
+void print_mem(uint16_t reg, FILE * output_stream,print_imediate_length print) {
+	if (print == PRINT) {
+		fprintf(output_stream, "word ");
+	} 
+
 	switch (reg) {
 		case 0: fprintf(output_stream, "[bx + si]"); break;	
 		case 1: fprintf(output_stream, "[bx + di]"); break;	
@@ -67,7 +75,20 @@ void print_mem(uint16_t reg, FILE * output_stream) {
 	}
 }
 
-void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream) {
+void print_seg(uint16_t seg, FILE * output_stream) {
+	switch (seg) {
+		case 0: fprintf(output_stream, "es"); break;	
+		case 1: fprintf(output_stream, "cs"); break;	
+		case 2: fprintf(output_stream, "ss"); break;	
+		case 3: fprintf(output_stream, "ds"); break;	
+	}
+}
+
+void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream,print_imediate_length print) {
+	if (print == PRINT) {
+		fprintf(output_stream, "byte ");
+	} 
+
 	char signed_data = (char) data;	
 
 	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
@@ -93,9 +114,12 @@ void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream) {
 	}
 }
 
-void print_mem_16(uint16_t reg, uint16_t data, FILE * output_stream) {
+void print_mem_16(uint16_t reg, uint16_t data, FILE * output_stream, print_imediate_length print) {
 	int16_t signed_data = data;	
 
+	if (print == PRINT) {
+		fprintf(output_stream, "word ");
+	} 
 	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
 	///I THINK THE LOGIC IS RIGHT, IF ANYTHING MASSAGE THE TYPES AND PRINT TYPES
 
@@ -139,30 +163,49 @@ void print_instruction_half(instruction * new_instruction, FILE * output_stream,
 
 	//little something to determine if the imediate register's length must be printed.
 	print_imediate_length print_length_switch = NO_PRINT;	
-	if (print_target == SOURCE && (opposite_type== MEM || opposite_type == MEM_8 || opposite_type == MEM_16) && (print_type == IM8 || print_type == IM16)) {
+
+	if (print_target == SOURCE && (opposite_type == DIRECT || opposite_type== MEM || opposite_type == MEM_8 || opposite_type == MEM_16) && (print_type == IM8 || print_type == IM16)) {
+		print_length_switch  = PRINT;	
+	} else if (print_target == SOURCE && (print_type == MEM || print_type == MEM_8 || print_type == MEM_16 || print_type == DIRECT) && (opposite_type == NONE)) {
 		print_length_switch  = PRINT;	
 	}
 
 	switch (print_type) {
 		case REG: print_reg(print_register, print_data, new_instruction->w, output_stream); break;
-		case MEM: print_mem(print_register, output_stream); break;
-		case MEM_8: print_mem_8(print_register, print_data, output_stream); break;
-		case MEM_16: print_mem_16(print_register, print_data, output_stream); break;
-		case DIRECT: print_direct_address(print_register, print_data, output_stream); break;
+		case MEM: print_mem(print_register, output_stream, print_length_switch); break;
+		case MEM_8: print_mem_8(print_register, print_data, output_stream, print_length_switch); break;
+		case MEM_16: print_mem_16(print_register, print_data, output_stream, print_length_switch); break;
+		case DIRECT: print_direct_address(print_register, print_data, output_stream, print_length_switch); break;
 		case IM8: print_im_8(print_data, output_stream, print_length_switch); break;
 		case IM16: print_im_16(print_data, output_stream, print_length_switch); break;
 		case ACC: print_acc(output_stream); break;
-
-		default: printf("Error"); break;
+		case SEG: print_seg(print_register, output_stream); break;
+		case NONE: break;
 	}	
 
 }
 
-void print_move(instruction * new_instruction, FILE * output_stream) {
-	fprintf(output_stream, "mov ");
+void print_two_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
+	switch (type) {
+		case MOV: fprintf(output_stream, "mov "); break;
+		default: printf("Invalid print.\n"); exit(0);
+	}
+
 
 	print_instruction_half(new_instruction, output_stream, DEST);
 	fprintf(output_stream, ", ");
+	print_instruction_half(new_instruction, output_stream, SOURCE);
+
+	fprintf(output_stream, "\n");
+}
+
+void print_one_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
+	switch (type) {
+		case POP: fprintf(output_stream, "pop "); break;
+		case PUSH: fprintf(output_stream, "push "); break;
+		default: printf("Invalid print.\n"); exit(0);
+	}
+
 	print_instruction_half(new_instruction, output_stream, SOURCE);
 
 	fprintf(output_stream, "\n");
