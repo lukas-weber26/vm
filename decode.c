@@ -241,6 +241,25 @@ void decode_seg(instruction_type type, instruction_stream * instructions, instru
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_reg_to_acc(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file, source_inversion inversion) {
+	int instruction_length = 1;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	new_instruction->type = type;
+	if (inversion == NON_INVERTED) {
+		new_instruction->order = ARG_1_SOURCE;
+		new_instruction->arg_one_type = REG;
+		new_instruction->arg_two_type = ACC;
+		new_instruction->register_one= mask(byte_one, 0b00000111, 0);
+	} else {
+		new_instruction->order = ARG_1_SOURCE;
+		new_instruction->arg_two_type = REG;
+		new_instruction->arg_one_type= ACC;
+		new_instruction->register_two= mask(byte_one, 0b00000111, 0);
+	}
+
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -285,6 +304,15 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//pop segment register 
 	} else if (match_instruction_to_stream("000xx111", NULL, instructions)) {
 		decode_seg(POP,instructions, new_instruction, assembly_file); 
+	//exchg regmem reg
+	} else if (match_instruction_to_stream("1000011x", "xxxxxxxx", instructions)) {
+		decode_regmem_to_regmem(XCHG,instructions, new_instruction, assembly_file); 
+	//exchg reg acc
+	} else if (match_instruction_to_stream("10010xxx", NULL, instructions)) {
+		decode_reg_to_acc(XCHG,instructions, new_instruction, assembly_file, NON_INVERTED); 
+	} else {
+		printf("Opcode not understood.\n");
+		exit(0);
 	}
 
 	//print the instruction
@@ -297,6 +325,9 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case PUSH:
 			print_one_arg_instruction(PUSH,new_instruction, output_stream);
+			break;
+		case XCHG:
+			print_two_arg_instruction(XCHG, new_instruction, output_stream);
 			break;
 	}
 

@@ -188,6 +188,7 @@ void print_instruction_half(instruction * new_instruction, FILE * output_stream,
 void print_two_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
 	switch (type) {
 		case MOV: fprintf(output_stream, "mov "); break;
+		case XCHG: fprintf(output_stream, "xchg "); break;
 		default: printf("Invalid print.\n"); exit(0);
 	}
 
