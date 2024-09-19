@@ -32,6 +32,11 @@ void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream) {
 	fprintf(output_stream, "[%d]", data);
 }
 
+void print_acc(FILE * output_stream) {
+	fprintf(output_stream, "ax");
+}
+
+
 void print_im_8(uint16_t data, FILE * output_stream, print_imediate_length print) {
 	if (print == PRINT) {
 		fprintf(output_stream, "byte %d", data);
@@ -146,6 +151,7 @@ void print_instruction_half(instruction * new_instruction, FILE * output_stream,
 		case DIRECT: print_direct_address(print_register, print_data, output_stream); break;
 		case IM8: print_im_8(print_data, output_stream, print_length_switch); break;
 		case IM16: print_im_16(print_data, output_stream, print_length_switch); break;
+		case ACC: print_acc(output_stream); break;
 
 		default: printf("Error"); break;
 	}	

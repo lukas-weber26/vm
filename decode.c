@@ -115,6 +115,29 @@ void decode_imediate_to_reg(instruction_type type, instruction_stream * instruct
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_mem_to_acc(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file, source_inversion inverted) {
+	int instruction_length = 1;
+
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+
+	new_instruction->type = type;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->arg_one_type= ACC;
+	new_instruction->arg_two_type= DIRECT;
+
+	instruction_length += 2;
+	new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+	
+	//flip if source inversion is toggled
+	if (inverted == NON_INVERTED) {
+		new_instruction->order = ARG_2_SOURCE;
+	} else {
+		new_instruction->order = ARG_1_SOURCE;
+	}
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -131,9 +154,10 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 		decode_imediate_to_reg(MOV,instructions, new_instruction, assembly_file); 
 	//mov memory to accumulator
 	} else if (match_instruction_to_stream("1010000x", NULL, instructions)) {
-		//decode_im_to_reg(MOV,instructions, INVERTED); 
+		decode_mem_to_acc(MOV,instructions, new_instruction, assembly_file, NON_INVERTED); 
 	//mov accumilator to memory 
 	} else if (match_instruction_to_stream("1010001x", NULL, instructions)) {
+		decode_mem_to_acc(MOV,instructions, new_instruction, assembly_file, INVERTED); 
 		//decode_acc_to_mem(MOV,instructions); 
 	//mov register/memory to segment register
 	} else if (match_instruction_to_stream("10001110", "xx0xxxxx", instructions)) {
