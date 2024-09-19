@@ -1,0 +1,163 @@
+#include "disassembler.h"
+
+typedef enum {PRINT, NO_PRINT} print_imediate_length;
+
+void print_reg(uint16_t reg, uint16_t data, uint8_t w, FILE * output_stream) {
+	if (w == 0) {
+		switch (reg) {
+			case 0: fprintf(output_stream, "al"); break;	
+			case 1: fprintf(output_stream, "cl"); break;	
+			case 2: fprintf(output_stream, "dl"); break;	
+			case 3: fprintf(output_stream, "bl"); break;	
+			case 4: fprintf(output_stream, "ah"); break;	
+			case 5: fprintf(output_stream, "ch"); break;	
+			case 6: fprintf(output_stream, "dh"); break;	
+			case 7: fprintf(output_stream, "bh"); break;	
+		}
+	} else if (w == 1) {
+		switch (reg) {
+			case 0: fprintf(output_stream, "ax"); break;	
+			case 1: fprintf(output_stream, "cx"); break;	
+			case 2: fprintf(output_stream, "dx"); break;	
+			case 3: fprintf(output_stream, "bx"); break;	
+			case 4: fprintf(output_stream, "sp"); break;	
+			case 5: fprintf(output_stream, "bp"); break;	
+			case 6: fprintf(output_stream, "si"); break;	
+			case 7: fprintf(output_stream, "di"); break;	
+		}
+	}
+}
+
+void print_direct_address(uint16_t reg, uint16_t data, FILE * output_stream) {
+	fprintf(output_stream, "[%d]", data);
+}
+
+void print_im_8(uint16_t data, FILE * output_stream, print_imediate_length print) {
+	if (print == PRINT) {
+		fprintf(output_stream, "byte %d", data);
+	} else {
+		fprintf(output_stream, "%d", data);
+	}
+
+}
+
+void print_im_16(uint16_t data, FILE * output_stream, print_imediate_length print) {
+	if (print == PRINT) {
+		fprintf(output_stream, "word %d", data);
+	} else {
+		fprintf(output_stream, "%d", data);
+	}
+}
+
+void print_mem(uint16_t reg, FILE * output_stream) {
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si]"); break;	
+		case 1: fprintf(output_stream, "[bx + di]"); break;	
+		case 2: fprintf(output_stream, "[bp + si]"); break;	
+		case 3: fprintf(output_stream, "[bp + di]"); break;	
+		case 4: fprintf(output_stream, "[si]"); break;	
+		case 5: fprintf(output_stream, "[di]"); break;	
+		case 6: fprintf(output_stream, "error"); break;	
+		case 7: fprintf(output_stream, "[bx]"); break;	
+	}
+}
+
+void print_mem_8(uint16_t reg, uint16_t data, FILE * output_stream) {
+	char signed_data = (char) data;	
+
+	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
+	///I THINK THE LOGIC IS RIGHT, IF ANYTHING MASSAGE THE TYPES AND PRINT TYPES
+
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si"); break;	
+		case 1: fprintf(output_stream, "[bx + di"); break;	
+		case 2: fprintf(output_stream, "[bp + si"); break;	
+		case 3: fprintf(output_stream, "[bp + di"); break;	
+		case 4: fprintf(output_stream, "[si"); break;	
+		case 5: fprintf(output_stream, "[di"); break;	
+		case 6: fprintf(output_stream, "[bp"); break;	
+		case 7: fprintf(output_stream, "[bx"); break;	
+	}
+
+	if (signed_data > 0) {
+		fprintf(output_stream, " + %d]", signed_data);
+	} else if (signed_data < 0){
+		fprintf(output_stream, " - %d]", -signed_data);
+	} else {
+		fprintf(output_stream, "]");
+	}
+}
+
+void print_mem_16(uint16_t reg, uint16_t data, FILE * output_stream) {
+	int16_t signed_data = data;	
+
+	//THESE PRINTS MAY BE PRODUCING WEIRD VALUES BECAUSE i AM USING UINT8 AND NOT BOTHERING WITH A SIGN
+	///I THINK THE LOGIC IS RIGHT, IF ANYTHING MASSAGE THE TYPES AND PRINT TYPES
+
+	switch (reg) {
+		case 0: fprintf(output_stream, "[bx + si"); break;	
+		case 1: fprintf(output_stream, "[bx + di"); break;	
+		case 2: fprintf(output_stream, "[bp + si"); break;	
+		case 3: fprintf(output_stream, "[bp + di"); break;	
+		case 4: fprintf(output_stream, "[si"); break;	
+		case 5: fprintf(output_stream, "[di"); break;	
+		case 6: fprintf(output_stream, "[bp"); break;	
+		case 7: fprintf(output_stream, "[bx"); break;	
+	}
+
+	if (signed_data > 0) {
+		fprintf(output_stream, " + %d]", signed_data);
+	} else if (signed_data < 0){
+		fprintf(output_stream, " - %d]", -signed_data);
+	} else {
+		fprintf(output_stream, "]");
+	}
+}
+
+void print_instruction_half(instruction * new_instruction, FILE * output_stream, print_type print_target) {
+	target print_type; 	
+	target opposite_type; 	
+	uint16_t print_register;
+	uint16_t print_data;
+
+	if ((new_instruction->order == ARG_1_SOURCE && print_target == SOURCE) || (new_instruction->order == ARG_2_SOURCE && print_target == DEST)) {
+		print_type = new_instruction->arg_one_type;
+		opposite_type = new_instruction->arg_two_type; 	
+		print_register = new_instruction->register_one;
+		print_data= new_instruction->data_one;
+	} else {
+		print_type = new_instruction->arg_two_type;
+		opposite_type = new_instruction->arg_one_type; 	
+		print_register = new_instruction->register_two;
+		print_data= new_instruction->data_two;
+	}
+
+	//little something to determine if the imediate register's length must be printed.
+	print_imediate_length print_length_switch = NO_PRINT;	
+	if (print_target == SOURCE && (opposite_type== MEM || opposite_type == MEM_8 || opposite_type == MEM_16) && (print_type == IM8 || print_type == IM16)) {
+		print_length_switch  = PRINT;	
+	}
+
+	switch (print_type) {
+		case REG: print_reg(print_register, print_data, new_instruction->w, output_stream); break;
+		case MEM: print_mem(print_register, output_stream); break;
+		case MEM_8: print_mem_8(print_register, print_data, output_stream); break;
+		case MEM_16: print_mem_16(print_register, print_data, output_stream); break;
+		case DIRECT: print_direct_address(print_register, print_data, output_stream); break;
+		case IM8: print_im_8(print_data, output_stream, print_length_switch); break;
+		case IM16: print_im_16(print_data, output_stream, print_length_switch); break;
+
+		default: printf("Error"); break;
+	}	
+
+}
+
+void print_move(instruction * new_instruction, FILE * output_stream) {
+	fprintf(output_stream, "mov ");
+
+	print_instruction_half(new_instruction, output_stream, DEST);
+	fprintf(output_stream, ", ");
+	print_instruction_half(new_instruction, output_stream, SOURCE);
+
+	fprintf(output_stream, "\n");
+}
