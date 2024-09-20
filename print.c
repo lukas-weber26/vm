@@ -217,6 +217,10 @@ void print_one_arg_instruction(instruction_type type,instruction * new_instructi
 	switch (type) {
 		case POP: fprintf(output_stream, "pop "); break;
 		case PUSH: fprintf(output_stream, "push "); break;
+		case INC: fprintf(output_stream, "inc "); break;
+		case DEC: fprintf(output_stream, "dec "); break;
+		case NEG: fprintf(output_stream, "neg "); break;
+
 		default: printf("Invalid print.\n"); exit(0);
 	}
 
@@ -254,11 +258,13 @@ void print_v_arg_instruction(instruction_type type,instruction * new_instruction
 void print_special_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
 	switch (type) {
 		case REP: fprintf(output_stream, "rep "); break;
-		case MOVS: fprintf(output_stream, "rep "); break;
-		case CMPS: fprintf(output_stream, "rep "); break;
-		case SCAS: fprintf(output_stream, "rep "); break;
-		case LODS: fprintf(output_stream, "rep "); break;
-		case STDS: fprintf(output_stream, "rep "); break;
+		case MOVS: fprintf(output_stream, "movs "); break;
+		case CMPS: fprintf(output_stream, "cmps "); break;
+		case SCAS: fprintf(output_stream, "scas "); break;
+		case LODS: fprintf(output_stream, "lods "); break;
+		case STDS: fprintf(output_stream, "stds "); break;
+		case AAA: fprintf(output_stream, "aaa "); break;
+		case DAA: fprintf(output_stream, "daa "); break;
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
 	}
 }

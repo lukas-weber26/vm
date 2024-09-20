@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {MOV, PUSH, POP, XCHG, ADD, ADC, SUB, SBB, AND, TEST, OR, XOR, NOT, SHL, SHR, SAR, ROL, ROR, RCL, RCR, REP, MOVS, CMPS, SCAS, LODS, STDS} instruction_type; //,PUSH, POP
+typedef enum {MOV, PUSH, POP, XCHG, ADD, ADC, SUB, SBB, AND, TEST, OR, XOR, NOT, SHL, SHR, SAR, ROL, ROR, RCL, RCR, REP, MOVS, CMPS, SCAS, LODS, STDS, INC, DEC, NEG, AAA, DAA} instruction_type; //,PUSH, POP
 typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT, NONE, CL} target;
 typedef enum {EXIT_ON_EOF, ERROR_ON_EOF} read_behaviour;
 typedef enum {INVALID = 0, VALID = 1} validity;

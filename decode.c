@@ -599,6 +599,28 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("1010101x", NULL, instructions)) {
 		decode_w(STDS, instructions, new_instruction, assembly_file); 
 
+	//increment regmem
+	} else if (match_instruction_to_stream("1111111x", "xx000xxx", instructions)) {
+		decode_regmem(INC, instructions, new_instruction, assembly_file); 
+	//increment reg 
+	} else if (match_instruction_to_stream("01000xxx", NULL, instructions)) {
+		decode_reg(INC, instructions, new_instruction, assembly_file); 
+	//decrement regmem
+	} else if (match_instruction_to_stream("1111111x", "xx000xxx", instructions)) {
+		decode_regmem(DEC, instructions, new_instruction, assembly_file); 
+	//increment reg 
+	} else if (match_instruction_to_stream("01000xxx", NULL, instructions)) {
+		decode_reg(DEC, instructions, new_instruction, assembly_file); 
+	//neg regmem
+	} else if (match_instruction_to_stream("1111011x", "xx011xxx", instructions)) {
+		decode_regmem(NEG, instructions, new_instruction, assembly_file); 
+	//AAA
+	} else if (match_instruction_to_stream("00110111", NULL, instructions)) {
+		decode_none(AAA, instructions, new_instruction, assembly_file); 
+	//DAA
+	} else if (match_instruction_to_stream("00100111", NULL, instructions)) {
+		decode_none(DAA, instructions, new_instruction, assembly_file); 
+
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
@@ -683,6 +705,21 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case STDS: 
 			print_special_instruction(STDS, new_instruction, output_stream);
+			break;
+		case INC: 
+			print_one_arg_instruction(INC, new_instruction, output_stream);
+			break;
+		case DEC: 
+			print_one_arg_instruction(DEC, new_instruction, output_stream);
+			break;
+		case NEG: 
+			print_one_arg_instruction(NEG, new_instruction, output_stream);
+			break;
+		case AAA: 
+			print_special_instruction(AAA, new_instruction, output_stream);
+			break;
+		case DAA: 
+			print_special_instruction(DAA, new_instruction, output_stream);
 			break;
 	}
 
