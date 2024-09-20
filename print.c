@@ -227,6 +227,28 @@ void print_one_arg_instruction(instruction_type type,instruction * new_instructi
 		case NEG: fprintf(output_stream, "neg "); break;
 		case AAM: fprintf(output_stream, "aam "); break;
 		case AAD: fprintf(output_stream, "aad "); break;
+	
+		//most of this vm is just ways to jump.
+		case JE: fprintf(output_stream, "pop "); break;
+		case JL: fprintf(output_stream, "push "); break;
+		case JLE: fprintf(output_stream, "inc "); break;
+		case JB: fprintf(output_stream, "dec "); break;
+		case JBE: fprintf(output_stream, "neg "); break;
+		case JP: fprintf(output_stream, "aam "); break;
+		case JO: fprintf(output_stream, "aad "); break;
+		case JS: fprintf(output_stream, "pop "); break;
+		case JNE: fprintf(output_stream, "push "); break;
+		case JNL: fprintf(output_stream, "inc "); break;
+		case JNLE: fprintf(output_stream, "dec "); break;
+		case JNB: fprintf(output_stream, "neg "); break;
+		case JNBE: fprintf(output_stream, "aam "); break;
+		case JNP: fprintf(output_stream, "aad "); break;
+		case JNO: fprintf(output_stream, "dec "); break;
+		case JNS: fprintf(output_stream, "neg "); break;
+		case LOOP: fprintf(output_stream, "aam "); break;
+		case LOOPZ: fprintf(output_stream, "aad "); break;
+		case LOOPNZ: fprintf(output_stream, "aad "); break;
+		case JCXZ: fprintf(output_stream, "aad "); break;
 
 		default: printf("Invalid print.\n"); exit(0);
 	}

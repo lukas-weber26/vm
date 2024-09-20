@@ -1,4 +1,5 @@
 #include "disassembler.h"
+#include <stdio.h>
 #define FALSE 0
 #define TRUE 1
 
@@ -417,6 +418,17 @@ void decode_none(instruction_type type, instruction_stream * instructions, instr
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_jump(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file ) {
+	int instruction_length = 2;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+	new_instruction->type = type;
+	new_instruction->data_one = byte_two;
+	new_instruction->arg_one_type = IP_INC8;
+	new_instruction->order = ARG_1_SOURCE;
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -662,11 +674,76 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//AAM
 	} else if (match_instruction_to_stream("1111011x", "00001010", instructions)) {
 		decode_regmem(AAM, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	
+	//JE
+	} else if (match_instruction_to_stream("01110100", NULL, instructions)) {
+		decode_jump(JE, instructions, new_instruction, assembly_file); 
+	//JL
+	} else if (match_instruction_to_stream("01111100", NULL, instructions)) {
+		decode_jump(JL, instructions, new_instruction, assembly_file); 
+	//JLE
+	} else if (match_instruction_to_stream("01111110", NULL, instructions)) {
+		decode_jump(JLE, instructions, new_instruction, assembly_file); 
+	//JB
+	} else if (match_instruction_to_stream("01110010", NULL, instructions)) {
+		decode_jump(JB, instructions, new_instruction, assembly_file); 
+	//JBE
+	} else if (match_instruction_to_stream("01110110", NULL, instructions)) {
+		decode_jump(JBE, instructions, new_instruction, assembly_file); 
+	//JP
+	} else if (match_instruction_to_stream("01111010", NULL, instructions)) {
+		decode_jump(JE, instructions, new_instruction, assembly_file); 
+	//JO
+	} else if (match_instruction_to_stream("01110000", NULL, instructions)) {
+		decode_jump(JO, instructions, new_instruction, assembly_file); 
+	//JS
+	} else if (match_instruction_to_stream("01111000", NULL, instructions)) {
+		decode_jump(JS, instructions, new_instruction, assembly_file); 
+	//JNE
+	} else if (match_instruction_to_stream("01110101", NULL, instructions)) {
+		decode_jump(JNE, instructions, new_instruction, assembly_file); 
+	//JNL
+	} else if (match_instruction_to_stream("01111101", NULL, instructions)) {
+		decode_jump(JNL, instructions, new_instruction, assembly_file); 
+	//JNLE
+	} else if (match_instruction_to_stream("01111111", NULL, instructions)) {
+		decode_jump(JNLE, instructions, new_instruction, assembly_file); 
+	//JNB
+	} else if (match_instruction_to_stream("01110011", NULL, instructions)) {
+		decode_jump(JNB, instructions, new_instruction, assembly_file); 
+	//JNBE
+	} else if (match_instruction_to_stream("01110111", NULL, instructions)) {
+		decode_jump(JNBE, instructions, new_instruction, assembly_file); 
+	//JNP
+	} else if (match_instruction_to_stream("01111011", NULL, instructions)) {
+		decode_jump(JNP, instructions, new_instruction, assembly_file); 
+	//JNO
+	} else if (match_instruction_to_stream("01110001", NULL, instructions)) {
+		decode_jump(JNO, instructions, new_instruction, assembly_file); 
+	//JNS
+	} else if (match_instruction_to_stream("01111001", NULL, instructions)) {
+		decode_jump(JNS, instructions, new_instruction, assembly_file); 
+	//LOOP
+	} else if (match_instruction_to_stream("11100010", NULL, instructions)) {
+		decode_jump(LOOP, instructions, new_instruction, assembly_file); 
+	//LOOPZ
+	} else if (match_instruction_to_stream("11100001", NULL, instructions)) {
+		decode_jump(LOOPZ, instructions, new_instruction, assembly_file); 
+	//LOOPNZ
+	} else if (match_instruction_to_stream("11100000", NULL, instructions)) {
+		decode_jump(LOOPNZ, instructions, new_instruction, assembly_file); 
+	//JCXZ
+	} else if (match_instruction_to_stream("11100011", NULL, instructions)) {
+		decode_jump(JCXZ, instructions, new_instruction, assembly_file); 
 
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
 	}
+
+	//RET, 
+	//IP_INC8
+	
 
 	//print the instruction
 	switch (new_instruction->type) {
@@ -780,17 +857,83 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case MUL:
 			print_two_arg_instruction(MUL, new_instruction, output_stream);
+			break;
 		case IMUL:
 			print_two_arg_instruction(IMUL, new_instruction, output_stream);
+			break;
 		case DIV:
 			print_two_arg_instruction(DIV, new_instruction, output_stream);
+			break;
 		case IDIV:
 			print_two_arg_instruction(IDIV, new_instruction, output_stream);
+			break;
 		case AAD:
 			print_one_arg_instruction(AAD, new_instruction, output_stream);
+			break;
 		case AAM:
 			print_one_arg_instruction(AAM, new_instruction, output_stream);
-
+			break;
+		case JE:
+			print_one_arg_instruction(JE, new_instruction, output_stream);
+			break;
+		case JL:
+			print_one_arg_instruction(JL, new_instruction, output_stream);
+			break;
+		case JLE:
+			print_one_arg_instruction(JLE, new_instruction, output_stream);
+			break;
+		case JB:
+			print_one_arg_instruction(JB, new_instruction, output_stream);
+			break;
+		case JBE:
+			print_one_arg_instruction(JBE, new_instruction, output_stream);
+			break;
+		case JP:
+			print_one_arg_instruction(JP, new_instruction, output_stream);
+			break;
+		case JO:
+			print_one_arg_instruction(JO, new_instruction, output_stream);
+			break;
+		case JS:
+			print_one_arg_instruction(JS, new_instruction, output_stream);
+			break;
+		case JNE:
+			print_one_arg_instruction(JNE, new_instruction, output_stream);
+			break;
+		case JNL:
+			print_one_arg_instruction(JNL, new_instruction, output_stream);
+			break;
+		case JNLE:
+			print_one_arg_instruction(JNLE, new_instruction, output_stream);
+			break;
+		case JNB:
+			print_one_arg_instruction(JNB, new_instruction, output_stream);
+			break;
+		case JNBE:
+			print_one_arg_instruction(JNBE, new_instruction, output_stream);
+			break;
+		case JNP:
+			print_one_arg_instruction(JNP, new_instruction, output_stream);
+			break;
+		case JNO:
+			print_one_arg_instruction(JNO, new_instruction, output_stream);
+			break;
+		case JNS:
+			print_one_arg_instruction(JNS, new_instruction, output_stream);
+			break;
+		case LOOP:
+			print_one_arg_instruction(LOOP, new_instruction, output_stream);
+			break;
+		case LOOPZ:
+			print_one_arg_instruction(LOOPZ, new_instruction, output_stream);
+			break;
+		case LOOPNZ:
+			print_one_arg_instruction(LOOPNZ, new_instruction, output_stream);
+			break;
+		case JCXZ:
+			print_one_arg_instruction(JCXZ, new_instruction, output_stream);
+			break;
+		default: printf("No print instruction could be found. Exiting. \n"); exit(0);
 	}
 
 	//execute the instruciton
