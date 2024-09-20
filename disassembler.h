@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {MOV, PUSH, POP, XCHG, ADD, ADC, SUB, SBB, AND, TEST, OR, XOR} instruction_type; //,PUSH, POP
-typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT, NONE} target;
+typedef enum {MOV, PUSH, POP, XCHG, ADD, ADC, SUB, SBB, AND, TEST, OR, XOR, NOT, SHL, SHR, SAR, ROL, ROR, RCL, RCR} instruction_type; //,PUSH, POP
+typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT, NONE, CL} target;
 typedef enum {EXIT_ON_EOF, ERROR_ON_EOF} read_behaviour;
 typedef enum {INVALID = 0, VALID = 1} validity;
 typedef enum {NON_INVERTED, INVERTED} source_inversion;
@@ -55,6 +55,7 @@ uint8_t mask(uint8_t byte, uint8_t mask, uint8_t shift);
 void print_two_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
 void print_one_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
 void print_zero_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
+void print_v_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream);
 
 //decoding
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream);

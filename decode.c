@@ -1,4 +1,6 @@
 #include "disassembler.h"
+#define FALSE 0
+#define TRUE 1
 
 //this should be the hardest decode!
 void decode_regmem_to_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
@@ -349,6 +351,48 @@ void decode_imediate_to_acc_short(instruction_type type, instruction_stream * in
 	
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
+		
+void decode_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file, int v_present) {
+	int instruction_length = 2;
+
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+
+	new_instruction->type = type;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+
+	if (v_present) {
+		new_instruction->v = mask(byte_one, 0b00000010, 1);
+		new_instruction->arg_one_type = CL;
+	} else {
+		new_instruction->v = 0;
+		new_instruction->arg_one_type = NONE;
+	}
+
+	new_instruction->mod = mask(byte_two, 0b11000000, 6); 
+	new_instruction->register_two= mask(byte_two, 0b00000111, 0);
+	new_instruction->order = ARG_2_SOURCE; //this is quite likely to throw things off but it's necessary since these instructions sometimes have two args
+	
+	if (new_instruction->mod == 0 && new_instruction->register_two!= 6) {
+		new_instruction->arg_two_type= MEM;
+	} else if (new_instruction->mod == 1) {
+		instruction_length += 1;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte);
+		new_instruction->arg_two_type= MEM_8;
+	} else if (new_instruction->mod == 2) {
+		instruction_length += 2;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_two_type= MEM_16;
+	} else if ((new_instruction->mod == 0 && new_instruction->register_two == 6)) {
+		instruction_length += 2;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_two_type= DIRECT;
+	} else if (new_instruction->mod == 3) {
+		new_instruction->arg_two_type= REG;
+	}
+
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
 
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
@@ -482,11 +526,36 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("001100xx", NULL, instructions)) {
 		decode_regmem_to_regmem(XOR,instructions, new_instruction, assembly_file); 
 	//xor immediate to regmem
-	} else if (match_instruction_to_stream("0011010x", NULL, instructions)) {
+	} else if (match_instruction_to_stream("0011010x", "xxxxxxxx", instructions)) {
 		decode_imediate_to_regmem(XOR,instructions, new_instruction, assembly_file); 
 	//xor immediate to accumilator
 	} else if (match_instruction_to_stream("0011010x", NULL, instructions)) {
 		decode_imediate_to_acc(XOR, instructions, new_instruction, assembly_file); 
+
+	//logic not 
+	} else if (match_instruction_to_stream("1111011x", "xx010xxx", instructions)) {
+		decode_regmem(NOT, instructions, new_instruction, assembly_file, FALSE); 
+	//logic	shl 
+	} else if (match_instruction_to_stream("110100xx", "xx100xxx", instructions)) {
+		decode_regmem(SHL, instructions, new_instruction, assembly_file, TRUE); 
+	//logic shr	
+	} else if (match_instruction_to_stream("110100xx", "xx101xxx", instructions)) {
+		decode_regmem(SHR, instructions, new_instruction, assembly_file, TRUE); 
+	//logic sar	
+	} else if (match_instruction_to_stream("110100xx", "xx111xxx", instructions)) {
+		decode_regmem(SAR, instructions, new_instruction, assembly_file, TRUE); 
+	//logic rol 
+	} else if (match_instruction_to_stream("110100xx", "xx000xxx", instructions)) {
+		decode_regmem(ROL, instructions, new_instruction, assembly_file, TRUE); 
+	//logic ror 
+	} else if (match_instruction_to_stream("110100xx", "xx001xxx", instructions)) {
+		decode_regmem(ROR, instructions, new_instruction, assembly_file, TRUE); 
+	//logic rcl 
+	} else if (match_instruction_to_stream("110100xx", "xx010xxx", instructions)) {
+		decode_regmem(RCL, instructions, new_instruction, assembly_file, TRUE); 
+	//logic rcr 
+	} else if (match_instruction_to_stream("110100xx", "xx011xxx", instructions)) {
+		decode_regmem(RCR, instructions, new_instruction, assembly_file, TRUE); 
 
 	} else {
 		printf("Opcode not understood.\n");
@@ -530,6 +599,30 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case XOR: 
 			print_two_arg_instruction(XOR, new_instruction, output_stream);
+			break;
+		case NOT: 
+			print_v_arg_instruction(NOT, new_instruction, output_stream);
+			break;
+		case SHL: 
+			print_v_arg_instruction(SHL, new_instruction, output_stream);
+			break;
+		case SHR: 
+			print_v_arg_instruction(SHR, new_instruction, output_stream);
+			break;
+		case SAR: 
+			print_v_arg_instruction(SAR, new_instruction, output_stream);
+			break;
+		case ROL: 
+			print_v_arg_instruction(ROL, new_instruction, output_stream);
+			break;
+		case ROR: 
+			print_v_arg_instruction(ROR, new_instruction, output_stream);
+			break;
+		case RCL: 
+			print_v_arg_instruction(RCL, new_instruction, output_stream);
+			break;
+		case RCR: 
+			print_v_arg_instruction(RCR, new_instruction, output_stream);
 			break;
 	}
 

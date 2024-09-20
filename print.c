@@ -3,6 +3,10 @@
 
 typedef enum {PRINT, NO_PRINT} print_imediate_length;
 
+void print_cl(FILE * output_stream) {
+	fprintf(output_stream, "cl"); 
+}
+
 void print_reg(uint16_t reg, uint16_t data, uint8_t w, FILE * output_stream) {
 	if (w == 0) {
 		switch (reg) {
@@ -180,6 +184,7 @@ void print_instruction_half(instruction * new_instruction, FILE * output_stream,
 		case IM16: print_im_16(print_data, output_stream, print_length_switch); break;
 		case ACC: print_acc(output_stream); break;
 		case SEG: print_seg(print_register, output_stream); break;
+		case CL: print_cl(output_stream); break;
 		case NONE: break;
 	}	
 
@@ -216,6 +221,32 @@ void print_one_arg_instruction(instruction_type type,instruction * new_instructi
 	}
 
 	print_instruction_half(new_instruction, output_stream, SOURCE);
+
+	fprintf(output_stream, "\n");
+}
+
+
+void print_v_arg_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
+	switch (type) {
+		case NOT: fprintf(output_stream, "not "); break;
+		case SHL: fprintf(output_stream, "shl "); break;
+		case SHR: fprintf(output_stream, "shr "); break;
+		case SAR: fprintf(output_stream, "sar "); break;
+		case ROL: fprintf(output_stream, "rol "); break;
+		case ROR: fprintf(output_stream, "ror "); break;
+		case RCL: fprintf(output_stream, "rcl "); break;
+		case RCR: fprintf(output_stream, "rcr "); break;
+		default: printf("Invalid print.\n"); exit(0);
+	}
+
+	//the destinations and sources here could easily be wrong 
+	if (new_instruction->v == 1) {
+		print_instruction_half(new_instruction, output_stream, SOURCE);
+		fprintf(output_stream, ", ");
+		print_instruction_half(new_instruction, output_stream, DEST);
+	} else {
+		print_instruction_half(new_instruction, output_stream, SOURCE);
+	}
 
 	fprintf(output_stream, "\n");
 }
