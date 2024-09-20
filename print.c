@@ -203,6 +203,10 @@ void print_two_arg_instruction(instruction_type type,instruction * new_instructi
 		case CMP: fprintf(output_stream, "cmp "); break;
 		case OR: fprintf(output_stream, "or "); break;
 		case XOR: fprintf(output_stream, "xor "); break;
+		case MUL: fprintf(output_stream, "mul "); break;
+		case IMUL: fprintf(output_stream, "imul "); break;
+		case DIV: fprintf(output_stream, "div "); break;
+		case IDIV: fprintf(output_stream, "idiv "); break;
 		default: printf("Invalid print.\n"); exit(0);
 	}
 
@@ -221,6 +225,8 @@ void print_one_arg_instruction(instruction_type type,instruction * new_instructi
 		case INC: fprintf(output_stream, "inc "); break;
 		case DEC: fprintf(output_stream, "dec "); break;
 		case NEG: fprintf(output_stream, "neg "); break;
+		case AAM: fprintf(output_stream, "aam "); break;
+		case AAD: fprintf(output_stream, "aad "); break;
 
 		default: printf("Invalid print.\n"); exit(0);
 	}
