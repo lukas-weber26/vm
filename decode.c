@@ -394,6 +394,29 @@ void decode_regmem(instruction_type type, instruction_stream * instructions, ins
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_z(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 1;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	new_instruction->v = mask(byte_one, 0b00000001, 0);
+	new_instruction->type = type;
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
+void decode_w(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 1;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->type = type;
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
+void decode_none(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 1;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	new_instruction->type = type;
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -557,6 +580,25 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("110100xx", "xx011xxx", instructions)) {
 		decode_regmem(RCR, instructions, new_instruction, assembly_file, TRUE); 
 
+	//rep
+	} else if (match_instruction_to_stream("1111001x", NULL, instructions)) {
+		decode_z(REP, instructions, new_instruction, assembly_file); 
+	//movs
+	} else if (match_instruction_to_stream("1010010x", NULL, instructions)) {
+		decode_w(MOVS, instructions, new_instruction, assembly_file); 
+	//cmps
+	} else if (match_instruction_to_stream("1010011x", NULL, instructions)) {
+		decode_w(CMPS, instructions, new_instruction, assembly_file); 
+	//scas
+	} else if (match_instruction_to_stream("1010111x", NULL, instructions)) {
+		decode_w(SCAS, instructions, new_instruction, assembly_file); 
+	//lods
+	} else if (match_instruction_to_stream("1010110x", NULL, instructions)) {
+		decode_w(LODS, instructions, new_instruction, assembly_file); 
+	//stds
+	} else if (match_instruction_to_stream("1010101x", NULL, instructions)) {
+		decode_w(STDS, instructions, new_instruction, assembly_file); 
+
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
@@ -623,6 +665,24 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case RCR: 
 			print_v_arg_instruction(RCR, new_instruction, output_stream);
+			break;
+		case REP: 
+			print_special_instruction(REP, new_instruction, output_stream);
+			break;
+		case MOVS: 
+			print_special_instruction(MOVS, new_instruction, output_stream);
+			break;
+		case CMPS: 
+			print_special_instruction(CMPS, new_instruction, output_stream);
+			break;
+		case SCAS: 
+			print_special_instruction(SCAS, new_instruction, output_stream);
+			break;
+		case LODS: 
+			print_special_instruction(LODS, new_instruction, output_stream);
+			break;
+		case STDS: 
+			print_special_instruction(STDS, new_instruction, output_stream);
 			break;
 	}
 

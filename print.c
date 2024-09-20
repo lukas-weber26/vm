@@ -250,3 +250,15 @@ void print_v_arg_instruction(instruction_type type,instruction * new_instruction
 
 	fprintf(output_stream, "\n");
 }
+
+void print_special_instruction(instruction_type type,instruction * new_instruction, FILE * output_stream) {
+	switch (type) {
+		case REP: fprintf(output_stream, "rep "); break;
+		case MOVS: fprintf(output_stream, "rep "); break;
+		case CMPS: fprintf(output_stream, "rep "); break;
+		case SCAS: fprintf(output_stream, "rep "); break;
+		case LODS: fprintf(output_stream, "rep "); break;
+		case STDS: fprintf(output_stream, "rep "); break;
+		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
+	}
+}
