@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {MOV, PUSH, POP, XCHG} instruction_type; //,PUSH, POP
+typedef enum {MOV, PUSH, POP, XCHG, ADD, ADC, SUB, SBB} instruction_type; //,PUSH, POP
 typedef enum {MEM, MEM_8, MEM_16, REG, SEG, ACC, IM8, IM16, DIRECT, NONE} target;
 typedef enum {EXIT_ON_EOF, ERROR_ON_EOF} read_behaviour;
 typedef enum {INVALID = 0, VALID = 1} validity;

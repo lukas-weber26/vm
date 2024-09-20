@@ -260,6 +260,78 @@ void decode_reg_to_acc(instruction_type type, instruction_stream * instructions,
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_signed_imediate_to_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 2;
+
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+
+	new_instruction->type = type;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->s = mask(byte_one, 0b00000010, 1);
+	new_instruction->mod = mask(byte_two, 0b11000000, 6); 
+
+	new_instruction->register_two= mask(byte_two, 0b00000111, 0);
+	new_instruction->order = ARG_1_SOURCE;
+	
+	if (new_instruction->mod == 0 && new_instruction->register_two!= 6) {
+		new_instruction->arg_two_type= MEM;
+	} else if (new_instruction->mod == 1) {
+		instruction_length += 1;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte);
+		new_instruction->arg_two_type= MEM_8;
+	} else if (new_instruction->mod == 2) {
+		instruction_length += 2;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_two_type= MEM_16;
+	} else if ((new_instruction->mod == 0 && new_instruction->register_two == 6)) {
+		instruction_length += 2;
+		new_instruction->data_two = (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_two_type= DIRECT;
+	} else if (new_instruction->mod == 3) {
+		new_instruction->arg_two_type= REG;
+	}
+
+	if (new_instruction->w == 1 && new_instruction->s == 0) {
+		//16 bit
+		instruction_length += 2;
+		new_instruction->data_one= (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_one_type = IM16;
+	} else {
+		//8 bit
+		instruction_length += 1;
+		new_instruction->data_one = (instructions->instruction_bytes[instruction_length-1].byte);
+		new_instruction->arg_one_type = IM8;
+	}
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
+void decode_imediate_to_acc(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 1;
+
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+
+	new_instruction->type = type;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->arg_two_type= ACC;
+	new_instruction->order = ARG_1_SOURCE;
+
+	if (new_instruction->w == 1) {
+		//16 bit
+		instruction_length += 2;
+		new_instruction->data_one= (instructions->instruction_bytes[instruction_length-1].byte << 8) + (instructions->instruction_bytes[instruction_length -2].byte);
+		new_instruction->arg_one_type = IM16;
+	} else {
+		//8 bit
+		instruction_length += 1;
+		new_instruction->data_one = (instructions->instruction_bytes[instruction_length-1].byte);
+		new_instruction->arg_one_type = IM8;
+	}
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -286,6 +358,8 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//mov segment register to register/memory
 	} else if (match_instruction_to_stream("10001100", "xx0xxxxx", instructions)) {
 		decode_rm_to_seg(MOV,instructions, new_instruction, assembly_file, INVERTED); 
+
+	
 	//push regsiter/memory	
 	} else if (match_instruction_to_stream("11111111", "xx110xxx", instructions)) {
 		decode_rm(PUSH,instructions, new_instruction, assembly_file); 
@@ -295,6 +369,8 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//push segment register 
 	} else if (match_instruction_to_stream("000xx110", NULL, instructions)) {
 		decode_seg(PUSH,instructions, new_instruction, assembly_file); 
+
+
 	//pop register/memory
 	} else if (match_instruction_to_stream("10001111", "xx000xxx", instructions)) {
 		decode_rm(POP,instructions, new_instruction, assembly_file); 
@@ -310,6 +386,50 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//exchg reg acc
 	} else if (match_instruction_to_stream("10010xxx", NULL, instructions)) {
 		decode_reg_to_acc(XCHG,instructions, new_instruction, assembly_file, NON_INVERTED); 
+
+
+	//similar instructions: add, adc, sub sbb and test or xor **note that some use the easier version of the second portion...
+
+	//add regmem_regmem
+	} else if (match_instruction_to_stream("000000xx", NULL, instructions)) {
+		decode_regmem_to_regmem(ADD,instructions, new_instruction, assembly_file); 
+	//add immediate to regmem
+	} else if (match_instruction_to_stream("100000xx", "xx000xxx", instructions)) {
+		decode_signed_imediate_to_regmem(ADD,instructions, new_instruction, assembly_file); 
+	//add immediate to accumilator
+	} else if (match_instruction_to_stream("0000010x", NULL, instructions)) {
+		decode_imediate_to_acc(ADD, instructions, new_instruction, assembly_file); 
+	
+	//adc regmem_regmem
+	} else if (match_instruction_to_stream("000100xx", NULL, instructions)) {
+		decode_regmem_to_regmem(ADC,instructions, new_instruction, assembly_file); 
+	//adc immediate to regmem
+	} else if (match_instruction_to_stream("100000xx", "xx010xxx", instructions)) {
+		decode_signed_imediate_to_regmem(ADC,instructions, new_instruction, assembly_file); 
+	//adc immediate to accumilator
+	} else if (match_instruction_to_stream("0001010x", NULL, instructions)) {
+		decode_imediate_to_acc(ADC, instructions, new_instruction, assembly_file); 
+
+	//sub regmem_regmem
+	} else if (match_instruction_to_stream("001010xx", NULL, instructions)) {
+		decode_regmem_to_regmem(SUB,instructions, new_instruction, assembly_file); 
+	//sub immediate to regmem
+	} else if (match_instruction_to_stream("100000xx", "xx101xxx", instructions)) {
+		decode_signed_imediate_to_regmem(SUB,instructions, new_instruction, assembly_file); 
+	//sub immediate to accumilator
+	} else if (match_instruction_to_stream("0010110x", NULL, instructions)) {
+		decode_imediate_to_acc(SUB, instructions, new_instruction, assembly_file); 
+
+	//sbb regmem_regmem
+	} else if (match_instruction_to_stream("000110xx", NULL, instructions)) {
+		decode_regmem_to_regmem(SBB,instructions, new_instruction, assembly_file); 
+	//sub immediate to regmem
+	} else if (match_instruction_to_stream("100000xx", "xx011xxx", instructions)) {
+		decode_signed_imediate_to_regmem(SBB,instructions, new_instruction, assembly_file); 
+	//sub immediate to accumilator
+	} else if (match_instruction_to_stream("0001110x", NULL, instructions)) {
+		decode_imediate_to_acc(SBB, instructions, new_instruction, assembly_file); 
+
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
@@ -328,6 +448,18 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case XCHG:
 			print_two_arg_instruction(XCHG, new_instruction, output_stream);
+			break;
+		case ADD:
+			print_two_arg_instruction(ADD, new_instruction, output_stream);
+			break;
+		case ADC:
+			print_two_arg_instruction(ADC, new_instruction, output_stream);
+			break;
+		case SUB:
+			print_two_arg_instruction(SUB, new_instruction, output_stream);
+			break;
+		case SBB:
+			print_two_arg_instruction(SBB, new_instruction, output_stream);
 			break;
 	}
 

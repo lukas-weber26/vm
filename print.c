@@ -189,6 +189,10 @@ void print_two_arg_instruction(instruction_type type,instruction * new_instructi
 	switch (type) {
 		case MOV: fprintf(output_stream, "mov "); break;
 		case XCHG: fprintf(output_stream, "xchg "); break;
+		case ADD: fprintf(output_stream, "add "); break;
+		case ADC: fprintf(output_stream, "adc "); break;
+		case SUB: fprintf(output_stream, "sub "); break;
+		case SBB: fprintf(output_stream, "sbb "); break;
 		default: printf("Invalid print.\n"); exit(0);
 	}
 
