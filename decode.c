@@ -441,6 +441,28 @@ void decode_data(instruction_type type, instruction_stream * instructions, instr
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_ip_inc(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file, int short_inc){
+	new_instruction->type = type;
+	int instruction_length = 3;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+	new_instruction->order = ARG_1_SOURCE;
+
+	if (short_inc == FALSE) {
+		instruction_length = 3;
+		uint8_t byte_three = instructions->instruction_bytes[1].byte;
+		new_instruction->data_one = (byte_three<< 8) + byte_two;
+		new_instruction->arg_one_type = IP_INC16;
+	} else {
+		instruction_length = 2;
+		new_instruction->data_one = byte_two;
+		new_instruction->arg_one_type = IP_INC8;
+	}
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -761,6 +783,34 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("11001011", NULL, instructions)) {
 		decode_data(RET, instructions, new_instruction, assembly_file); 
 
+	//call direct within segment 
+	} else if (match_instruction_to_stream("11101000", NULL, instructions)) {
+		decode_ip_inc(CALL, instructions, new_instruction, assembly_file, FALSE); 
+	//indirect within segment
+	} else if (match_instruction_to_stream("11111111", "xx010xxx", instructions)) {
+		decode_regmem(CALL, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	//direct intersegment
+	} else if (match_instruction_to_stream("10011010", NULL, instructions)) {
+		decode_ip_inc(CALL, instructions, new_instruction, assembly_file, FALSE); 
+	//indirect intersegment 
+	} else if (match_instruction_to_stream("11111111", "xx011xxx", instructions)) {
+		decode_regmem(CALL, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	
+	//jmp direct within segment 
+	} else if (match_instruction_to_stream("11101001", NULL, instructions)) {
+		decode_ip_inc(JMP, instructions, new_instruction, assembly_file, FALSE); 
+	//jmp direct within segment short
+	} else if (match_instruction_to_stream("11101011", NULL, instructions)) {
+		decode_ip_inc(JMP, instructions, new_instruction, assembly_file, TRUE); 
+	//jmp within segment
+	} else if (match_instruction_to_stream("11111111", "xx100xxx", instructions)) {
+		decode_regmem(JMP, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	//jmp intersegment
+	} else if (match_instruction_to_stream("11101010", NULL, instructions)) {
+		decode_ip_inc(JMP, instructions, new_instruction, assembly_file, FALSE); 
+	//jmp intersegment 
+	} else if (match_instruction_to_stream("11111111", "xx101xxx", instructions)) {
+		decode_regmem(JMP, instructions, new_instruction, assembly_file, NON_INVERTED); 
 
 	} else {
 		printf("Opcode not understood.\n");
@@ -961,6 +1011,12 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case RET:
 			print_one_or_zero_arg1(RET, new_instruction,output_stream);
+			break;
+		case CALL:
+			print_one_arg_instruction(CALL, new_instruction,output_stream);
+			break;
+		case JMP:
+			print_one_arg_instruction(CALL, new_instruction,output_stream);
 			break;
 		default: printf("No print instruction could be found. Exiting. \n"); exit(0);
 	}

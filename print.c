@@ -1,4 +1,5 @@
 #include "disassembler.h"
+#include <stdint.h>
 #include <stdio.h>
 
 typedef enum {PRINT, NO_PRINT} print_imediate_length;
@@ -60,6 +61,18 @@ void print_im_16(uint16_t data, FILE * output_stream, print_imediate_length prin
 	} else {
 		fprintf(output_stream, "%d", data);
 	}
+}
+
+void print_ip(uint16_t print_data, FILE * output_stream) {
+	fprintf(output_stream, "%d", (int16_t)print_data);
+}
+
+void print_ip_8(uint16_t print_data, FILE * output_stream) {
+	fprintf(output_stream, "%d", (int8_t)print_data);
+}
+
+void print_ip_16(uint16_t print_data, FILE * output_stream) {
+	fprintf(output_stream, "%d", (int16_t)print_data);
 }
 
 void print_mem(uint16_t reg, FILE * output_stream,print_imediate_length print) {
@@ -185,6 +198,9 @@ void print_instruction_half(instruction * new_instruction, FILE * output_stream,
 		case ACC: print_acc(output_stream); break;
 		case SEG: print_seg(print_register, output_stream); break;
 		case CL: print_cl(output_stream); break;
+		case IP: print_ip(print_data, output_stream); break;
+		case IP_INC8: print_ip_8(print_data, output_stream); break;
+		case IP_INC16: print_ip_16(print_data, output_stream); break;
 		case NONE: break;
 	}	
 
@@ -249,6 +265,9 @@ void print_one_arg_instruction(instruction_type type,instruction * new_instructi
 		case LOOPZ: fprintf(output_stream, "aad "); break;
 		case LOOPNZ: fprintf(output_stream, "aad "); break;
 		case JCXZ: fprintf(output_stream, "aad "); break;
+		
+		case CALL: fprintf(output_stream, "call "); break;
+		case JMP: fprintf(output_stream, "jmp "); break;
 
 		default: printf("Invalid print.\n"); exit(0);
 	}
