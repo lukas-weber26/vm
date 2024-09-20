@@ -301,3 +301,16 @@ void print_special_instruction(instruction_type type,instruction * new_instructi
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
 	}
 }
+
+void print_one_or_zero_arg1(instruction_type type, instruction * new_instruction , FILE * output_stream) {
+	switch (type) {
+		case RET: fprintf(output_stream, "ret ");
+		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0);
+	}
+
+	if (new_instruction ->arg_one_type != NONE) {
+		print_instruction_half(new_instruction, output_stream, SOURCE);
+	} 
+
+	fprintf(output_stream, "\n");
+}

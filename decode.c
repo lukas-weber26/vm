@@ -429,6 +429,18 @@ void decode_jump(instruction_type type, instruction_stream * instructions, instr
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_data(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file ) {
+	int instruction_length = 3;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+	uint8_t byte_three = instructions->instruction_bytes[1].byte;
+	new_instruction->type = type;
+	new_instruction->data_one = (byte_three<< 8) + byte_two;
+	new_instruction->arg_one_type = IM16;
+	new_instruction->order = ARG_1_SOURCE;
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -736,6 +748,20 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("11100011", NULL, instructions)) {
 		decode_jump(JCXZ, instructions, new_instruction, assembly_file); 
 
+	//RET within seg
+	} else if (match_instruction_to_stream("11000011", NULL, instructions)) {
+		decode_none(RET, instructions, new_instruction, assembly_file); 
+	//Ret intersegment
+	} else if (match_instruction_to_stream("11001011", NULL, instructions)) {
+		decode_none(RET, instructions, new_instruction, assembly_file); 
+	//ret seg (large)
+	} else if (match_instruction_to_stream("11001011", NULL, instructions)) {
+		decode_data(RET, instructions, new_instruction, assembly_file); 
+	//ret intersegment (large)
+	} else if (match_instruction_to_stream("11001011", NULL, instructions)) {
+		decode_data(RET, instructions, new_instruction, assembly_file); 
+
+
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
@@ -932,6 +958,9 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case JCXZ:
 			print_one_arg_instruction(JCXZ, new_instruction, output_stream);
+			break;
+		case RET:
+			print_one_or_zero_arg1(RET, new_instruction,output_stream);
 			break;
 		default: printf("No print instruction could be found. Exiting. \n"); exit(0);
 	}
