@@ -200,6 +200,7 @@ void print_two_arg_instruction(instruction_type type,instruction * new_instructi
 		case SBB: fprintf(output_stream, "sbb "); break;
 		case AND: fprintf(output_stream, "and "); break;
 		case TEST: fprintf(output_stream, "test "); break;
+		case CMP: fprintf(output_stream, "cmp "); break;
 		case OR: fprintf(output_stream, "or "); break;
 		case XOR: fprintf(output_stream, "xor "); break;
 		default: printf("Invalid print.\n"); exit(0);
@@ -265,6 +266,10 @@ void print_special_instruction(instruction_type type,instruction * new_instructi
 		case STDS: fprintf(output_stream, "stds "); break;
 		case AAA: fprintf(output_stream, "aaa "); break;
 		case DAA: fprintf(output_stream, "daa "); break;
+		case AAS: fprintf(output_stream, "aas "); break;
+		case DAS: fprintf(output_stream, "das "); break;
+		case CBW: fprintf(output_stream, "cbw"); break;
+		case CWD: fprintf(output_stream, "cwd "); break;
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
 	}
 }

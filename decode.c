@@ -601,25 +601,67 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 
 	//increment regmem
 	} else if (match_instruction_to_stream("1111111x", "xx000xxx", instructions)) {
-		decode_regmem(INC, instructions, new_instruction, assembly_file); 
+		decode_regmem(INC, instructions, new_instruction, assembly_file, NON_INVERTED); 
 	//increment reg 
 	} else if (match_instruction_to_stream("01000xxx", NULL, instructions)) {
 		decode_reg(INC, instructions, new_instruction, assembly_file); 
 	//decrement regmem
 	} else if (match_instruction_to_stream("1111111x", "xx000xxx", instructions)) {
-		decode_regmem(DEC, instructions, new_instruction, assembly_file); 
+		decode_regmem(DEC, instructions, new_instruction, assembly_file, NON_INVERTED); 
 	//increment reg 
 	} else if (match_instruction_to_stream("01000xxx", NULL, instructions)) {
 		decode_reg(DEC, instructions, new_instruction, assembly_file); 
 	//neg regmem
 	} else if (match_instruction_to_stream("1111011x", "xx011xxx", instructions)) {
-		decode_regmem(NEG, instructions, new_instruction, assembly_file); 
+		decode_regmem(NEG, instructions, new_instruction, assembly_file, NON_INVERTED); 
+
 	//AAA
 	} else if (match_instruction_to_stream("00110111", NULL, instructions)) {
 		decode_none(AAA, instructions, new_instruction, assembly_file); 
 	//DAA
 	} else if (match_instruction_to_stream("00100111", NULL, instructions)) {
 		decode_none(DAA, instructions, new_instruction, assembly_file); 
+	//AAS
+	} else if (match_instruction_to_stream("00111111", NULL, instructions)) {
+		decode_none(AAS, instructions, new_instruction, assembly_file); 
+	//DAS
+	} else if (match_instruction_to_stream("00101111", NULL, instructions)) {
+		decode_none(DAS, instructions, new_instruction, assembly_file); 
+	//CBW
+	} else if (match_instruction_to_stream("10011000", NULL, instructions)) {
+		decode_none(CBW, instructions, new_instruction, assembly_file); 
+	//CWD
+	} else if (match_instruction_to_stream("10011001", NULL, instructions)) {
+		decode_none(CWD, instructions, new_instruction, assembly_file); 
+
+	//cmp regmem to regmem
+	} else if (match_instruction_to_stream("001110xx", NULL, instructions)) {
+		decode_regmem_to_regmem(CMP,instructions, new_instruction, assembly_file); 
+	//cmp immediate to regmem
+	} else if (match_instruction_to_stream("100000xx", "xx111xxx", instructions)) {
+		decode_imediate_to_regmem(CMP,instructions, new_instruction, assembly_file); 
+	//cmp immediate to accumilator
+	} else if (match_instruction_to_stream("0011110x", NULL, instructions)) {
+		decode_imediate_to_acc_short(CMP, instructions, new_instruction, assembly_file); 
+
+	//MUL
+	} else if (match_instruction_to_stream("1111011x", "xx100xxx", instructions)) {
+		decode_regmem_to_regmem(MUL, instructions, new_instruction, assembly_file); 
+	//IMUL
+	} else if (match_instruction_to_stream("1111011x", "xx101xxx", instructions)) {
+		decode_regmem_to_regmem(IMUL, instructions,new_instruction, assembly_file); 
+	//DIV
+	} else if (match_instruction_to_stream("1111011x", "xx110xxx", instructions)) {
+		decode_regmem_to_regmem(DIV, instructions, new_instruction, assembly_file); 
+	//IDIV
+	} else if (match_instruction_to_stream("1111011x", "xx111xxx", instructions)) {
+		decode_regmem_to_regmem(IDIV, instructions, new_instruction, assembly_file); 
+	//AAD
+	} else if (match_instruction_to_stream("11010101", "00001010", instructions)) {
+		decode_regmem(AAD, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	//AAM
+	} else if (match_instruction_to_stream("1111011x", "00001010", instructions)) {
+		decode_regmem(AAM, instructions, new_instruction, assembly_file, NON_INVERTED); 
 
 	} else {
 		printf("Opcode not understood.\n");
@@ -657,6 +699,9 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case TEST: 
 			print_two_arg_instruction(TEST, new_instruction, output_stream);
+			break;
+		case CMP: 
+			print_two_arg_instruction(CMP, new_instruction, output_stream);
 			break;
 		case OR: 
 			print_two_arg_instruction(OR, new_instruction, output_stream);
@@ -721,6 +766,31 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 		case DAA: 
 			print_special_instruction(DAA, new_instruction, output_stream);
 			break;
+		case AAS: 
+			print_special_instruction(AAS, new_instruction, output_stream);
+			break;
+		case DAS: 
+			print_special_instruction(DAS, new_instruction, output_stream);
+			break;
+		case CBW: 
+			print_special_instruction(CBW, new_instruction, output_stream);
+			break;
+		case CWD: 
+			print_special_instruction(CWD, new_instruction, output_stream);
+			break;
+		case MUL:
+			print_two_arg_instruction(MUL, new_instruction, output_stream);
+		case IMUL:
+			print_two_arg_instruction(IMUL, new_instruction, output_stream);
+		case DIV:
+			print_two_arg_instruction(DIV, new_instruction, output_stream);
+		case IDIV:
+			print_two_arg_instruction(IDIV, new_instruction, output_stream);
+		case AAD:
+			print_one_arg_instruction(AAD, new_instruction, output_stream);
+		case AAM:
+			print_one_arg_instruction(AAM, new_instruction, output_stream);
+
 	}
 
 	//execute the instruciton
