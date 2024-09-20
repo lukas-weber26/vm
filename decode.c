@@ -332,6 +332,24 @@ void decode_imediate_to_acc(instruction_type type, instruction_stream * instruct
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
 
+void decode_imediate_to_acc_short(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
+	int instruction_length = 1;
+
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+
+	new_instruction->type = type;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->arg_two_type= ACC;
+	new_instruction->order = ARG_1_SOURCE;
+
+	//8 bit
+	instruction_length += 1;
+	new_instruction->data_one = (instructions->instruction_bytes[instruction_length-1].byte);
+	new_instruction->arg_one_type = IM8;
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
+
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
 
 	//note that some of these instructions specify inversion or not while others calculate inversion themselves.
@@ -430,6 +448,46 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	} else if (match_instruction_to_stream("0001110x", NULL, instructions)) {
 		decode_imediate_to_acc(SBB, instructions, new_instruction, assembly_file); 
 
+	//and regmem to regmem
+	} else if (match_instruction_to_stream("001000xx", NULL, instructions)) {
+		decode_regmem_to_regmem(AND,instructions, new_instruction, assembly_file); 
+	//and immediate to regmem
+	} else if (match_instruction_to_stream("1000000x", "xx100xxx", instructions)) {
+		decode_imediate_to_regmem(SBB,instructions, new_instruction, assembly_file); 
+	//and immediate to accumilator
+	} else if (match_instruction_to_stream("0010010x", NULL, instructions)) {
+		decode_imediate_to_acc(SBB, instructions, new_instruction, assembly_file); 
+	
+	//test regmem to regmem
+	} else if (match_instruction_to_stream("000100xx", NULL, instructions)) {
+		decode_regmem_to_regmem(TEST,instructions, new_instruction, assembly_file); 
+	//test immediate to regmem
+	} else if (match_instruction_to_stream("1111011x", "xx000xxx", instructions)) {
+		decode_imediate_to_regmem(TEST,instructions, new_instruction, assembly_file); 
+	//test immediate to accumilator
+	} else if (match_instruction_to_stream("1010100x", NULL, instructions)) {
+		decode_imediate_to_acc_short(TEST, instructions, new_instruction, assembly_file); 
+	
+	//or regmem to regmem
+	} else if (match_instruction_to_stream("000010xx", NULL, instructions)) {
+		decode_regmem_to_regmem(OR,instructions, new_instruction, assembly_file); 
+	//or immediate to regmem
+	} else if (match_instruction_to_stream("1000000x", "xx001xxx", instructions)) {
+		decode_imediate_to_regmem(OR,instructions, new_instruction, assembly_file); 
+	//or immediate to accumilator
+	} else if (match_instruction_to_stream("0000110x", NULL, instructions)) {
+		decode_imediate_to_acc(OR, instructions, new_instruction, assembly_file); 
+	
+	//xor regmem to regmem
+	} else if (match_instruction_to_stream("001100xx", NULL, instructions)) {
+		decode_regmem_to_regmem(XOR,instructions, new_instruction, assembly_file); 
+	//xor immediate to regmem
+	} else if (match_instruction_to_stream("0011010x", NULL, instructions)) {
+		decode_imediate_to_regmem(XOR,instructions, new_instruction, assembly_file); 
+	//xor immediate to accumilator
+	} else if (match_instruction_to_stream("0011010x", NULL, instructions)) {
+		decode_imediate_to_acc(XOR, instructions, new_instruction, assembly_file); 
+
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
@@ -460,6 +518,18 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 			break;
 		case SBB:
 			print_two_arg_instruction(SBB, new_instruction, output_stream);
+			break;
+		case AND: 
+			print_two_arg_instruction(AND, new_instruction, output_stream);
+			break;
+		case TEST: 
+			print_two_arg_instruction(TEST, new_instruction, output_stream);
+			break;
+		case OR: 
+			print_two_arg_instruction(OR, new_instruction, output_stream);
+			break;
+		case XOR: 
+			print_two_arg_instruction(XOR, new_instruction, output_stream);
 			break;
 	}
 
