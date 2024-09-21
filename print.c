@@ -325,6 +325,19 @@ void print_special_instruction(instruction_type type,instruction * new_instructi
 		case SAHF: fprintf(output_stream, "sahf\n"); break;
 		case PUSHF: fprintf(output_stream, "pushf\n"); break;
 		case POPF: fprintf(output_stream, "popf\n"); break;
+		case CLC: fprintf(output_stream, "clc\n "); break;
+		case CMC: fprintf(output_stream, "cmc\n "); break;
+		case STC: fprintf(output_stream, "stc\n "); break;
+		case CLD: fprintf(output_stream, "cld\n "); break;
+		case STD: fprintf(output_stream, "std\n "); break;
+		case CLI: fprintf(output_stream, "cli\n "); break;
+		case STI: fprintf(output_stream, "sti\n "); break;
+		case HLT: fprintf(output_stream, "hlt\n "); break;
+		case WAIT: fprintf(output_stream, "wait\n "); break;
+		case ESC: fprintf(output_stream, "esc\n "); break;
+		case LOCK: fprintf(output_stream, "lock\n "); break;
+		case INTO: fprintf(output_stream, "into\n "); break;
+		case IRET: fprintf(output_stream, "iret\n "); break;
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
 	}
 }
@@ -342,4 +355,12 @@ void print_one_or_zero_arg1(instruction_type type, instruction * new_instruction
 	} 
 
 	fprintf(output_stream, "\n");
+}
+
+void print_interupt(instruction_type type, instruction * new_instruction , FILE * output_stream) {
+	if (new_instruction->arg_one_type != NA) {
+		fprintf(output_stream, "int %d\n", new_instruction->data_one); 
+	} else {
+		fprintf(output_stream, "int 3\n"); 
+	}
 }
