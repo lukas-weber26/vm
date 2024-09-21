@@ -1,7 +1,4 @@
 #include "disassembler.h"
-#include <stdio.h>
-#define FALSE 0
-#define TRUE 1
 
 //this should be the hardest decode!
 void decode_regmem_to_regmem(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file) {
