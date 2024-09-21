@@ -461,6 +461,19 @@ void decode_ip_inc(instruction_type type, instruction_stream * instructions, ins
 	
 	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
 }
+	
+void decode_data_8(instruction_type type, instruction_stream * instructions, instruction * new_instruction, FILE * assembly_file){
+	new_instruction->type = type;
+	int instruction_length = 2;
+	uint8_t byte_one = instructions->instruction_bytes[0].byte;
+	uint8_t byte_two = instructions->instruction_bytes[1].byte;
+	new_instruction->order = ARG_1_SOURCE;
+	new_instruction->w = mask(byte_one, 0b00000001, 0);
+	new_instruction->arg_one_type = IM8;
+	new_instruction->data_one = byte_two;
+	
+	instructin_stream_pop_n_bytes(instructions, assembly_file, instruction_length);
+}
 
 
 void decode(instruction_stream * instructions, FILE * assembly_file, FILE * output_stream) {
@@ -811,15 +824,53 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 	//jmp intersegment 
 	} else if (match_instruction_to_stream("11111111", "xx101xxx", instructions)) {
 		decode_regmem(JMP, instructions, new_instruction, assembly_file, NON_INVERTED); 
+	
+
+	//In fixed 
+	} else if (match_instruction_to_stream("1110010x", NULL, instructions)) {
+		decode_data_8(IN, instructions, new_instruction, assembly_file); 
+	//In variable
+	} else if (match_instruction_to_stream("1110110x", NULL, instructions)) {
+		decode_w(IN, instructions, new_instruction, assembly_file); 
+	//out fixed 
+	} else if (match_instruction_to_stream("1110011x", NULL, instructions)) {
+		decode_data_8(OUT, instructions, new_instruction, assembly_file); 
+	//out variable
+	} else if (match_instruction_to_stream("1110111x", NULL, instructions)) {
+		decode_w(OUT, instructions, new_instruction, assembly_file); 
+	
+	//xlat variable
+	} else if (match_instruction_to_stream("11010111", NULL, instructions)) {
+		decode_none(XLAT, instructions, new_instruction, assembly_file); 
+	//lahf variable
+	} else if (match_instruction_to_stream("10011111", NULL, instructions)) {
+		decode_none(LAHF, instructions, new_instruction, assembly_file); 
+	//sahf variable
+	} else if (match_instruction_to_stream("10011110", NULL, instructions)) {
+		decode_none(SAHF, instructions, new_instruction, assembly_file); 
+	//pushf variable
+	} else if (match_instruction_to_stream("10011100", NULL, instructions)) {
+		decode_none(PUSHF, instructions, new_instruction, assembly_file); 
+	//popf variable
+	} else if (match_instruction_to_stream("10011101", NULL, instructions)) {
+		decode_none(POPF, instructions, new_instruction, assembly_file); 
+
+	//lea
+	} else if (match_instruction_to_stream("10001101", NULL, instructions)) {
+		decode_regmem_to_regmem(LEA, instructions, new_instruction, assembly_file); 
+	//lds
+	} else if (match_instruction_to_stream("11000101", NULL, instructions)) {
+		decode_regmem_to_regmem(LDS, instructions, new_instruction, assembly_file); 
+	//les
+	} else if (match_instruction_to_stream("11000100", NULL, instructions)) {
+		decode_regmem_to_regmem(LES, instructions, new_instruction, assembly_file); 
 
 	} else {
 		printf("Opcode not understood.\n");
 		exit(0);
 	}
 
-	//RET, 
-	//IP_INC8
-	
+	//lea lds les
 
 	//print the instruction
 	switch (new_instruction->type) {
@@ -1018,11 +1069,40 @@ void decode(instruction_stream * instructions, FILE * assembly_file, FILE * outp
 		case JMP:
 			print_one_arg_instruction(CALL, new_instruction,output_stream);
 			break;
+		case IN:
+			print_one_or_zero_arg1(IN, new_instruction, output_stream);
+			break;
+		case OUT:
+			print_one_or_zero_arg1(OUT, new_instruction, output_stream);
+			break;
+		case XLAT:
+			print_special_instruction(XLAT, new_instruction, output_stream);
+			break;
+		case LAHF:
+			print_special_instruction(LAHF, new_instruction, output_stream);
+			break;
+		case SAHF:
+			print_special_instruction(SAHF, new_instruction, output_stream);
+			break;
+		case PUSHF:
+			print_special_instruction(PUSHF, new_instruction, output_stream);
+			break;
+		case POPF:
+			print_special_instruction(POPF, new_instruction, output_stream);
+			break;
+		case LEA:
+			print_two_arg_instruction(LEA, new_instruction, output_stream);
+			break;
+		case LDS:
+			print_two_arg_instruction(LDS, new_instruction, output_stream);
+			break;
+		case LES:
+			print_two_arg_instruction(LES, new_instruction, output_stream);
+			break;
 		default: printf("No print instruction could be found. Exiting. \n"); exit(0);
 	}
 
-	//execute the instruciton
-	
+
 	free(new_instruction);
 
 	//at this point the instruction stream has been updated.

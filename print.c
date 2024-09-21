@@ -223,6 +223,9 @@ void print_two_arg_instruction(instruction_type type,instruction * new_instructi
 		case IMUL: fprintf(output_stream, "imul "); break;
 		case DIV: fprintf(output_stream, "div "); break;
 		case IDIV: fprintf(output_stream, "idiv "); break;
+		case LEA: fprintf(output_stream, "lea "); break;
+		case LDS: fprintf(output_stream, "lds "); break;
+		case LES: fprintf(output_stream, "les "); break;
 		default: printf("Invalid print.\n"); exit(0);
 	}
 
@@ -317,6 +320,11 @@ void print_special_instruction(instruction_type type,instruction * new_instructi
 		case DAS: fprintf(output_stream, "das "); break;
 		case CBW: fprintf(output_stream, "cbw"); break;
 		case CWD: fprintf(output_stream, "cwd "); break;
+		case XLAT: fprintf(output_stream, "xlat\n"); break;
+		case LAHF: fprintf(output_stream, "lahf\n"); break;
+		case SAHF: fprintf(output_stream, "sahf\n"); break;
+		case PUSHF: fprintf(output_stream, "pushf\n"); break;
+		case POPF: fprintf(output_stream, "popf\n"); break;
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0); 
 	}
 }
@@ -324,6 +332,8 @@ void print_special_instruction(instruction_type type,instruction * new_instructi
 void print_one_or_zero_arg1(instruction_type type, instruction * new_instruction , FILE * output_stream) {
 	switch (type) {
 		case RET: fprintf(output_stream, "ret ");
+		case IN: fprintf(output_stream, "in");
+		case OUT: fprintf(output_stream, "out ");
 		default: printf("Instruction not recognized as special. Exiting. \n"); exit(0);
 	}
 
