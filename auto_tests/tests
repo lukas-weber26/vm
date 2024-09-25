@@ -1,0 +1,6 @@
+./testfiles/single_register_mov.asm
+./testfiles/many_register_mov.asm
+./testfiles/more_movs.asm
+./testfiles/challenge_movs.asm
+./testfiles/cmp_jnz.asm
+./testfiles/add_sub.asm
